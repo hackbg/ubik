@@ -1,0 +1,43 @@
+{
+  "name": "@hackbg/ubik",
+  "version": "2.0.0",
+  "type": "module",
+  "main": "index.mjs",
+  "homepage": "https://github.com/hackbg/ubik",
+  "repository": "hackbg/ubik",
+  "bin": {
+    "ubik": "./ubik.cli.mjs"
+  },
+  "description": "Codemods for making TypeScript suck less.",
+  "license": "AGPL-3.0-only",
+  "files": [
+    "README.md",
+    "src/*",
+    "ubik.cli.mjs"
+  ],
+  "scripts": {
+    "ubik": "./ubik.cli.mjs",
+    "test": "time c8 ./test/index.mjs",
+    "test:split": "time c8 node ./test/split-imports.mjs",
+    "test:merge": "time c8 node ./test/merge-packages.mjs",
+    "test:publish": "time c8 node ./test/publish-package.mjs",
+    "test:stars": "time c8 node ./test/split-stars.mjs",
+    "cov:publish": "time c8 -r html node ./test/publish-package.mjs",
+    "cov": "time c8 -r html ./test/index.mjs"
+  },
+  "dependencies": {
+    "@babel/parser": "^7.22.10",
+    "@hackbg/logs": "^2",
+    "acorn": "^8.10.0",
+    "acorn-walk": "^8.2.0",
+    "astring": "^1.8.6",
+    "fast-glob": "^3.3.1",
+    "mkdirp": "^3.0.1",
+    "node-fetch": "^3.3.2",
+    "recast": "^0.23.4",
+    "rimraf": "^5.0.1"
+  },
+  "devDependencies": {
+    "c8": "^8.0.1"
+  }
+}

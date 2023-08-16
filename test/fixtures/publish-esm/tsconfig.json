@@ -1,0 +1,9 @@
+{
+  "exclude": [
+    "dist/**/*",
+    "node_modules/**/*"
+  ],
+  "compilerOptions": {
+    "typeRoots": ["./node_modules/@types"]
+  }
+}
