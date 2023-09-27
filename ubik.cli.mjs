@@ -74,7 +74,7 @@ try {
 
     case 'split-stars': {
       if (argv.length === 0) {
-        console.error('You did not provide any inputs.')
+        console.error('You did not provide any arguments.')
         process.exit(1)
       }
       const split = argv.indexOf('--')
@@ -83,11 +83,11 @@ try {
         process.exit(1)
       }
       const pkgs = argv.slice(0, split)
-      const srcs = argv.slice(split + 1)
       if (pkgs.length < 1) {
-        console.error('You did not provide any packages imports of which to fix.')
+        console.error('You did not provide any packages.')
         process.exit(1)
       }
+      const srcs = argv.slice(split + 1)
       if (srcs.length < 1) {
         console.error('You did not provide any sources to process.')
         process.exit(1)
@@ -204,7 +204,7 @@ function printUsage () {
   console.info('     Provide more detailed descriptions of what each command does and why.')
   console.info(' ', bold('split-types'), '[--dry] [subdirs...]')
   console.info(`     ${colors.yellow('Experimental.')} Fix types imported without "import type"`)
-  console.info(' ', bold('split-stars'), '[--dry] packages... -- sources...')
+  console.info(' ', bold('split-stars'), '[--dry] packagenames... -- sourcedirs...')
   console.info(`     ${colors.yellow('Experimental.')} Fix default imports of CommonJS modules imported as ESM by Node`)
   console.info(' ', bold('fix-import-dirs'), '[--dry] [subdirs...]')
   console.info(`     ${colors.yellow('Experimental.')} Add missing directory indices`)
@@ -242,7 +242,7 @@ function printRationale () {
   console.info('     separate "import type" or "export type ... from" declarations.')
   console.info('     This way, TypeScript strips them at compile time and your code can run.')
   console.info()
-  console.info(' ', bold('split-stars'), '[--dry] packages... -- sources...')
+  console.info(' ', bold('split-stars'), '[--dry] packagenames... -- sourcedirs...')
   console.info()
   console.info('     In Node.js, when a ESM package imports a CommonJS package using "import *"')
   console.info('     an extra "default" key may be added around the imported package contents.')

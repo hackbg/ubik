@@ -33,13 +33,16 @@ Now you can publish your library with `npm run ubik publish`.
 
 ### Fixing extensions
 
-The recommended way to do this is by publishing your package with:
+`tsc` outputs invalid JavaScript when building ESM libraries. [Read more](./docs/extensions.md)
+
+The recommended way to fix this with Ubik is by using the following command
+instead of `npm publish` to publish your package to NPM:
 
 ```sh
 npm run ubik publish
 ```
 
-You can also do:
+You can also do this to apply the fix in place:
 
 ```sh
 npm run ubik compile
@@ -54,7 +57,12 @@ For best experience, add to `tsconfig.json`:
 {
   "exclude": [
     "dist/**/*"
-  ]
+  ],
+  "compilerOptions": {
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "node10"
+  }
 }
 ```
 
@@ -69,38 +77,11 @@ dist/
 *.dist.d.ts
 ```
 
-This assumes that the entrypoint of your package (`main` in `package.json`)
+**KNOWN ISSUE:** This operation assumes that the entrypoint of your package (`main` in `package.json`)
 is at the top level of your source code tree, e.g. `./index.ts` or `./src/index.ts` -
 but not e.g. `./src/foo/index.ts` next to `./src/bar/somethingelse.ts` (the latter
 would probably fail to compile all files or will place them in inappropriate locations -
 good matter for a pull request.)
-
-#### Fixing extensions - rationale
-
-TypeScript wants you to import modules with:
-
-```ts
-import { foo } from "./foo"
-```
-
-but the ECMAScript specification expects:
-
-```js
-import { foo } from "./foo.js"
-```
-
-TypeScript doesn't add the extensions; it also doesn't provide an extensibility hook
-which could be used to add them. [The documentation](https://www.typescriptlang.org/docs/handbook/esm-node.html)
-is confusing and unhelpful; the solution that it suggests is ridiculous and unacceptable.
-On GitHub issues, the TypeScript developers have repeatedly reacted with indifference.
-
-**Before Node.js 16, this was less of a problem:** imports without extensions still
-worked. However, since Node 16 started enforcing the ES Modules spec (which requires
-extensions), the code that `tsc` outputs became effectively **invalid and impossible to run**
-(unless you were writing your program in a single file).
-
-What, were you expecting the compiler for evertone's favorite "strict superset of JS"
-to, idk, output correct JS that is ready to execute? You crazy person!
 
 ### Splitting away type imports
 
@@ -110,8 +91,13 @@ to, idk, output correct JS that is ready to execute? You crazy person!
 
 ### Fixing CommonJS star imports
 
+When targeting ESM on Node, CommonJS imports are wrapped in an extra `default` key,
+of which TypeScript is unaware. [Read more](./docs/split-stars.md)
+
+Let's rewrite the imports so that both work:
+
 ```sh
-// TODO
+npm exec ubik split-stars ./src -- protobufjs
 ```
 
 ### Others
