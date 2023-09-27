@@ -23,14 +23,32 @@ Add to `package.json`:
 {
   "devDependencies": {
     "@hackbg/ubik": "^2"
-  },
-  "scripts": {
-    "ubik": "ubik"
   }
 }
 ```
 
-Add to `tsconfig.json`:
+Now you can publish your library with `npm run ubik publish`.
+
+## Tasks
+
+### Fixing extensions
+
+The recommended way to do this is by publishing your package with:
+
+```sh
+npm run ubik publish
+```
+
+You can also do:
+
+```sh
+npm run ubik compile
+```
+
+Note that this will modify your `package.json` and leave the original at `package.json.bak`.
+Same applies for errors during publishing.
+
+For best experience, add to `tsconfig.json`:
 
 ```json
 {
@@ -43,6 +61,7 @@ Add to `tsconfig.json`:
 Add to `.gitignore`:
 
 ```
+package.json.bak
 dist/
 *.dist.js
 *.dist.mjs
@@ -50,9 +69,13 @@ dist/
 *.dist.d.ts
 ```
 
-Now you can publish your library with `npm run ubik publish`.
+This assumes that the entrypoint of your package (`main` in `package.json`)
+is at the top level of your source code tree, e.g. `./index.ts` or `./src/index.ts` -
+but not e.g. `./src/foo/index.ts` next to `./src/bar/somethingelse.ts` (the latter
+would probably fail to compile all files or will place them in inappropriate locations -
+good matter for a pull request.)
 
-## Basic premise
+#### Fixing extensions - rationale
 
 TypeScript wants you to import modules with:
 
@@ -77,7 +100,23 @@ extensions), the code that `tsc` outputs became effectively **invalid and imposs
 (unless you were writing your program in a single file).
 
 What, were you expecting the compiler for evertone's favorite "strict superset of JS"
-to, idk, output correct JS that is ready to execute? You crazy person.
+to, idk, output correct JS that is ready to execute? You crazy person!
+
+### Splitting away type imports
+
+```sh
+// TODO
+```
+
+### Fixing CommonJS star imports
+
+```sh
+// TODO
+```
+
+### Others
+
+Todo-todo, todo todo [todooooo...](https://youtu.be/VyZiIuMufTA?si=Owhmey5gRLN-AaaK&t=11)
 
 ## Also goes well with...
 
