@@ -1,0 +1,8 @@
+{
+  "include": [ "*.cjs", "*.mjs", "task/*", "tool/*", "test/*" ],
+  "compilerOptions": {
+    "checkJs": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true
+  }
+}

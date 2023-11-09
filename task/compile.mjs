@@ -64,7 +64,7 @@ export async function prepareTypeScript ({
   cjsOut = 'dist/cjs',
   keep = false,
   dryRun = true,
-} = []) {
+} = {}) {
   packageJson.ubik = true
   await compileTypeScript({ cwd, dtsOut, esmOut, cjsOut })
   let distFiles = new Set()
@@ -74,9 +74,14 @@ export async function prepareTypeScript ({
     await patchESMImports({ cwd, dryRun, files: packageJson.files })
     await patchDTSImports({ cwd, dryRun, files: packageJson.files })
     await patchCJSRequires({ cwd, dryRun, files: packageJson.files })
-    console.log("Backing up package.json to package.json.bak")
-    copyFileSync(join(cwd, 'package.json'), join(cwd, 'package.json.bak'))
-    writeFileSync(join(cwd, 'package.json'), JSON.stringify(packageJson, null, 2), 'utf8')
+    if (dryRun) {
+      console.info("Published package.json would be:")
+      console.info(JSON.stringify(packageJson, null, 2))
+    } else {
+      console.log("Backing up package.json to package.json.bak")
+      copyFileSync(join(cwd, 'package.json'), join(cwd, 'package.json.bak'))
+      writeFileSync(join(cwd, 'package.json'), JSON.stringify(packageJson, null, 2), 'utf8')
+    }
   } catch (e) {
     revertModifications({ cwd, keep: false, distFiles })
     throw e

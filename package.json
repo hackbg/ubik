@@ -1,6 +1,6 @@
 {
   "name": "@hackbg/ubik",
-  "version": "2.0.0",
+  "version": "2.0.0-rc.1",
   "type": "module",
   "main": "index.mjs",
   "homepage": "https://github.com/hackbg/ubik",
@@ -23,7 +23,9 @@
     "test:publish": "time c8 node ./test/publish-package.mjs",
     "test:stars": "time c8 node ./test/split-stars.mjs",
     "cov:publish": "time c8 -r html node ./test/publish-package.mjs",
-    "cov": "time c8 -r html ./test/index.mjs"
+    "cov": "time c8 -r html ./test/index.mjs",
+    "check": "tsc --noEmit",
+    "release": "pnpm publish --access public --otp 123123"
   },
   "dependencies": {
     "@babel/parser": "^7.22.10",
@@ -38,6 +40,7 @@
     "rimraf": "^5.0.1"
   },
   "devDependencies": {
-    "c8": "^8.0.1"
+    "c8": "^8.0.1",
+    "typescript": "^5.2.2"
   }
 }

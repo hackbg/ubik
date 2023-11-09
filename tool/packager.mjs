@@ -1,6 +1,7 @@
+//@ts-check
 import { join } from 'node:path'
 import { readFileSync } from 'node:fs'
-
+import { UbikError } from './error.mjs'
 import { console, bold } from '../tool/logger.mjs'
 
 /** Load package.json. Bail if already modified. */
@@ -24,4 +25,3 @@ export function readPackageJson ({
   }
   return { packageJson }
 }
-

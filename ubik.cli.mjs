@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+//@ts-check
 
 /**
 
@@ -40,7 +41,7 @@ import { Resolver } from './tool/resolver.mjs'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const ownPackage = resolve(__dirname, 'package.json')
-const { version } = JSON.parse(readFileSync(ownPackage))
+const { version } = JSON.parse(readFileSync(ownPackage, 'utf8'))
 const console = new Console(`@hackbg/ubik ${version}`)
 
 const argv = [...process.argv]
@@ -170,9 +171,7 @@ try {
     }
 
     case 'publish': {
-      const cwd = process.cwd()
-      const packageJson = JSON.parse(readFileSync(resolve(cwd, 'package.json')))
-      await release({ dryRun, cwd, packageJson, args: argv })
+      await release({ dryRun, cwd: process.cwd(), args: argv })
       break
     }
 
@@ -186,8 +185,10 @@ try {
 
   }
 } catch (e) {
-  console.error(e)
-  console.error('Failed. See above for more info.')
+  console.error(e) 
+  if (e.message) {
+    console.error(`Ubik failed for the following reason:\n${bold(e.message)}`)
+  }
   process.exit(2)
 }
 
