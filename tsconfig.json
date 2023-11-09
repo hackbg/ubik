@@ -1,6 +1,9 @@
 {
   "include": [ "*.cjs", "*.mjs", "task/*", "tool/*", "test/*" ],
   "compilerOptions": {
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "node10",
     "checkJs": true,
     "esModuleInterop": true,
     "skipLibCheck": true

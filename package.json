@@ -23,7 +23,7 @@
     "test:publish": "time c8 node ./test/publish-package.mjs",
     "test:stars": "time c8 node ./test/split-stars.mjs",
     "cov:publish": "time c8 -r html node ./test/publish-package.mjs",
-    "cov": "time c8 -r html ./test/index.mjs",
+    "cov": "time c8 -r html -r text ./test/index.mjs",
     "check": "tsc --noEmit",
     "release": "pnpm publish --access public --otp 123123"
   },
@@ -41,6 +41,7 @@
   },
   "devDependencies": {
     "c8": "^8.0.1",
-    "typescript": "^5.2.2"
+    "typescript": "^5.2.2",
+    "@types/node": "^20"
   }
 }
