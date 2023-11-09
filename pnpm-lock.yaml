@@ -5,8 +5,8 @@ dependencies:
     specifier: ^7.22.10
     version: 7.22.10
   '@hackbg/logs':
-    specifier: ^2
-    version: 2.0.0
+    specifier: ^2.0.8
+    version: 2.0.8
   acorn:
     specifier: ^8.10.0
     version: 8.10.0
@@ -76,19 +76,19 @@ packages:
     resolution: {integrity: sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==}
     dev: true
 
-  /@hackbg/allo@1.0.1:
-    resolution: {integrity: sha512-4kxNqEmongDYO3eUzATEZbicleljcJQ7eggYPZaFykAyqCKlETMVlshUWFj1IgS2pmQCRODZogbCafGVwk4JOw==}
+  /@hackbg/allo@1.0.2:
+    resolution: {integrity: sha512-iyuq1cnRHzDJMfNrFgoH/tBXgMTdyWS4CwMy5NMDcULi9E/yhJRqemRIttsSBv7ary2WYFU4OxbQTN1jTD3irw==}
     dev: false
 
-  /@hackbg/hide@1.0.1:
-    resolution: {integrity: sha512-BecGgnc+ji88OiVn4KricJaYir1VsxC2ZLLPDGEnb0DnwrBdJglvprw+SaKxVAotfPyIp6Wgppbnr03bmUSO2g==}
+  /@hackbg/hide@1.0.3:
+    resolution: {integrity: sha512-iW54b4gibkZrzwAMsd0Qc3xDb9QwsYvLCNvdHl1EgLfgod0ZLfanjPxwYybfXEqNBAvUZ+w00FTQv4vSvBfp4A==}
     dev: false
 
-  /@hackbg/logs@2.0.0:
-    resolution: {integrity: sha512-fTwWfeBCvU3s1lEYdUzW5Ix/LYR/lUi+AgovmieNW+NpqOAC4xAE0v5CVuV2/jqf0IhVEfTbR6YCYPGzIaHEIA==}
+  /@hackbg/logs@2.0.8:
+    resolution: {integrity: sha512-bf5hfuUjWgwBdgv5eY9vVPVazYyWKQlvH0KHnlW8qBNYIuPP67/aL7/uIrp39JI8EYvVsPiF9+IoVAj3wp/dJA==}
     dependencies:
-      '@hackbg/allo': 1.0.1
-      '@hackbg/hide': 1.0.1
+      '@hackbg/allo': 1.0.2
+      '@hackbg/hide': 1.0.3
       chalk: 4.1.2
     dev: false
 

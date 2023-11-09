@@ -23,8 +23,9 @@
     "release": "pnpm publish --access public --otp 123123"
   },
   "dependencies": {
+    "@hackbg/logs": "^2.0.8",
+
     "@babel/parser": "^7.22.10",
-    "@hackbg/logs": "^2",
     "acorn": "^8.10.0",
     "acorn-walk": "^8.2.0",
     "astring": "^1.8.6",

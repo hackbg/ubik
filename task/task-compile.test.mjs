@@ -32,6 +32,14 @@ for (const cwd of [
     assert(patch({ files: [] }))
   }
 
+  assert.deepEqual(Compile.patchESMImport({
+    cwd,
+    dryRun: true,
+    file: 'name',
+    source: `import foo from './lib'`,
+  }), {
+    [resolve(cwd, 'name')]: `import foo from "./lib.dist.mjs";\n`
+  })
   assert.deepEqual(Compile.patchCJSRequire({
     cwd,
     dryRun: true,
@@ -40,5 +48,17 @@ for (const cwd of [
   }), {
     [resolve(cwd, 'name')]: `const foo = require("./lib.dist.cjs");\n`
   })
+  assert.deepEqual(Compile.patchCJSRequire({
+    cwd,
+    dryRun: true,
+    file: 'name',
+    source: `const foo = require('./lib-missing')`,
+  }), {})
+  assert.deepEqual(Compile.patchCJSRequire({
+    cwd,
+    dryRun: true,
+    file: 'name',
+    source: `const foo = require('./lib'+dynamic)`,
+  }), {})
 
 }
