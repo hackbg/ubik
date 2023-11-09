@@ -130,16 +130,18 @@ export class Resolver extends Map {
     return saved
   }
   /** Call a transformation function for each entry in the resolver. */
-  forEach (...args) {
-    super.forEach(...args)
+  forEach (x, y) {
+    super.forEach(x, y)
     return this
   }
 }
 
 /** Represents a file or directory. */
 export class Entry {
+  path
   constructor (resolver, path) {
-    Object.assign(this, { resolver, path: resolve(resolver.root, path) })
+    this.resolver = resolver
+    this.path = resolve(resolver.root, path)
     Object.defineProperty(this, 'resolver', { enumerable: false })
   }
 }
@@ -169,13 +171,14 @@ export class JSONFile extends File {
     super(resolver, path)
   }
   parse () {
-    return JSON.parse(readFileSync(this.path))
+    return JSON.parse(readFileSync(this.path, 'utf8'))
   }
 }
 
 /** Represents a TypeScript module. Keeps track of its imports and exports. */
 export class TSFile extends File {
-  constructor (resolver, path, source = readFileSync(resolve(resolver.root, path))) {
+  source
+  constructor (resolver, path, source = readFileSync(resolve(resolver.root, path), 'utf8')) {
     super(resolver, path)
     Object.defineProperty(this, 'source', { get () { return source } })
   }

@@ -34,7 +34,7 @@ import * as astring from 'astring'
 import fastGlob from 'fast-glob'
 
 import { recastTS } from '../shims.cjs'
-import { UbikError } from '../tool/error.mjs'
+import { UbikError, required } from '../tool/error.mjs'
 import { console, bold } from '../tool/logger.mjs'
 import { readPackageJson } from '../tool/packager.mjs'
 
@@ -71,8 +71,8 @@ export async function prepareTypeScript ({
   try {
     distFiles = await flattenFiles({ cwd, packageJson, dtsOut, esmOut, cjsOut })
     await patchPackageJson({ cwd, packageJson })
-    await patchESMImports({ cwd, dryRun, files: packageJson.files })
-    await patchDTSImports({ cwd, dryRun, files: packageJson.files })
+    await patchESMImports({ dryRun, files: packageJson.files })
+    await patchDTSImports({ dryRun, files: packageJson.files })
     await patchCJSRequires({ cwd, dryRun, files: packageJson.files })
     if (dryRun) {
       console.info("Published package.json would be:")
@@ -121,7 +121,7 @@ export async function cleanAll ({
 
 /** Restore the original package.json and remove the dist files */
 export function revertModifications ({
-  cwd,
+  cwd = process.cwd(),
   keep = false,
   distFiles = new Set(),
   dtsOut = 'dist/dts',
@@ -163,12 +163,12 @@ export function revertModifications ({
 
 // Compile TS -> JS
 export async function compileTypeScript ({
-  cwd,
-  tsc     = process.env.TSC || 'tsc',
-  dtsOut  = 'dist/dts',
-  esmOut  = 'dist/esm',
-  cjsOut  = 'dist/cjs',
-  verbose = process.env.UBIK_VERBOSE,
+  cwd       = process.cwd(),
+  tsc       = process.env.TSC || 'tsc',
+  dtsOut    = 'dist/dts',
+  esmOut    = 'dist/esm',
+  cjsOut    = 'dist/cjs',
+  verbose   = process.env.UBIK_VERBOSE,
   esmModule = process.env.UBIK_ESM_MODULE || 'esnext',
   esmTarget = process.env.UBIK_ESM_TARGET || 'esnext',
   cjsModule = process.env.UBIK_CJS_MODULE || 'commonjs',
@@ -184,11 +184,11 @@ export async function compileTypeScript ({
 }
 
 export async function flattenFiles ({
-  cwd,
-  packageJson,
-  dtsOut = 'dist/dts',
-  esmOut = 'dist/esm',
-  cjsOut = 'dist/cjs',
+  cwd         = process.cwd(),
+  packageJson = readPackageJson({ cwd }).packageJson,
+  dtsOut      = 'dist/dts',
+  esmOut      = 'dist/esm',
+  cjsOut      = 'dist/cjs',
 }) {
   // Files given new locations by the flattening.
   // Deleted after publication - unless you run `ubik fix`, which keeps them around.
@@ -242,12 +242,12 @@ export async function flattenFiles ({
 const replaceExtension = (x, a, b) => join(dirname(x), `${basename(x, a)}${b}`)
 
 export async function collectFiles ({
-  cwd,
-  name,
-  srcDir,
-  distDir,
-  ext1,
-  ext2,
+  cwd       = process.cwd(),
+  name      = required('name')    || '',
+  srcDir    = required('srcDir')  || '',
+  distDir   = required('distDir') || '',
+  ext1      = required('ext1')    || '',
+  ext2      = required('ext2')    || '',
   distFiles = new Set(),
 } = {}) {
   const { log } = console.sub(`(collecting ${name})`)
@@ -274,7 +274,7 @@ export async function collectFiles ({
 }
 
 export function patchPackageJson ({
-  cwd,
+  cwd = process.cwd(),
   packageJson,
   forceTS = process.env.UBIK_FORCE_TS
 }) {
@@ -312,9 +312,9 @@ export function patchPackageJson ({
 }
 
 export function patchESMImports ({
-  files = [],
-  dryRun = true,
-  verbose = process.env.UBIK_VERBOSE,
+  files       = [],
+  dryRun      = true,
+  verbose     = process.env.UBIK_VERBOSE,
   ecmaVersion = process.env.UBIK_ECMA || 'latest'
 }) {
   files = files.filter(x=>x.endsWith(distEsmExt))
@@ -356,7 +356,7 @@ export function patchESMImports ({
 export function patchDTSImports ({
   files,
   verbose = process.env.UBIK_VERBOSE,
-  dryRun = true,
+  dryRun  = true,
 }) {
   files = files.filter(x=>x.endsWith(distDtsExt))
   console.log()
@@ -395,10 +395,10 @@ export function patchDTSImports ({
 }
 
 export function patchCJSRequires ({
-  cwd,
-  files = [],
+  cwd     = process.cwd(),
+  files   = [],
   verbose = process.env.UBIK_VERBOSE,
-  dryRun = true,
+  dryRun  = true,
 }) {
   files = files.filter(x=>x.endsWith(distCjsExt))
   console.log(`Patching requires in ${files.length} CJS files...`)
@@ -463,14 +463,12 @@ export function patchCJSRequires ({
 }
 
 export async function runConcurrently ({
-  cwd,
+  cwd      = process.cwd(),
   commands = [],
   verbose  = process.env.UBIK_VERBOSE
 }) {
-
   console.log(`Running ${bold(commands.length)} commands in ${bold(cwd)}:`)
   commands.forEach(command=>console.log(' ', command))
-
   try {
     return await Promise.all(commands.map(
       command=>execPromise(command, { cwd, stdio: 'inherit' })
@@ -479,7 +477,6 @@ export async function runConcurrently ({
     process.stdout.write(e.stdout)
     throw new UbikError.RunFailed(commands)
   }
-
 }
 
 // Convert absolute path to relative

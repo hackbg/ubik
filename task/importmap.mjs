@@ -4,18 +4,19 @@ import { spawnSync } from 'node:child_process'
 import { relative, resolve, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { console, bold } from '../tool/logger.mjs'
+import { required } from '../tool/error.mjs'
 
 const run = (cmd, ...args) => spawnSync(cmd, args, { maxBuffer: Infinity }).stdout.toString()
 
 const indent = x => new Array(x).fill(' ').join('')
 
 export async function generateImportMap ({
-  output = 'importmap.json',
-  manifest = JSON.parse(run('pnpm', 'ls', '--json', '--depth', 'Infinity'))[0],
-  importMap = { imports: {}, scopes: {} },
-  patchMain = () => {},
-  patchExports = () => {},
-  patchImports = () => {}
+  output       = 'importmap.json',
+  manifest     = JSON.parse(run('pnpm', 'ls', '--json', '--depth', 'Infinity'))[0],
+  importMap    = { imports: {}, scopes: {} },
+  patchMain    = x => {},
+  patchExports = x => {},
+  patchImports = x => {}
 } = {}) {
 
   await addToImportMap(0, manifest.name, manifest.version, manifest.dependencies, importMap.imports)
@@ -42,10 +43,10 @@ export async function generateImportMap ({
 
   // Rule 01: Add main entrypoint of package.
   async function addMain (depth, {
-    scope,
-    name,
-    relpath,
-    manifest = {}
+    scope    = required('scope')    || '',
+    name     = required('name')     || '',
+    relpath  = required('relpath')  || '',
+    manifest = required('manifest') || { main: '', module: '', exports: {} }
   } = {}) {
     const { main, module, exports = {} } = manifest
     // Rule 01A: "module" overrides "main", defaulting to "index.js"
@@ -77,10 +78,10 @@ export async function generateImportMap ({
 
   // Rule 02: Add contents of "exports"
   async function addExports (depth, {
-    scope,
-    name,
-    relpath,
-    manifest = {}
+    scope    = required('scope')    || '',
+    name     = required('name')     || '',
+    relpath  = required('relpath')  || '',
+    manifest = required('manifest') || { main: '', module: '', exports: {} }
   } = {}) {
     const { exports = {} } = manifest
     const selfRefs = importMap.scopes[`/${relpath}/`] ??= {}
@@ -108,16 +109,15 @@ export async function generateImportMap ({
   }
 
   async function addImports (depth, {
-    scope,
-    name,
-    relpath,
+    scope   = required('scope')    || '',
+    name    = required('name')     || '',
+    relpath = required('relpath')  || '',
     imports = {}
   }) {
     const selfRefs = importMap.scopes[`/${relpath}/`] ??= {}
     if (Object.keys(imports).length > 0) {
       for (const [specifier, entry] of Object.entries(imports)) {
         console.log({specifier, entry})
-        process.exit(123)
         // Extensibility hook
         await patchImports({ importMap, depth, scope, name, relpath, imports, specifier, entry })
       }

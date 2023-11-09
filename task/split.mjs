@@ -21,7 +21,7 @@
 import { getDefault } from '../tool/parser.mjs'
 
 import { Console, bold } from '@hackbg/logs'
-const console = new Console('@hackbg/ubik')
+const console = new Console('@hackbg/ubik (split)')
 
 export function separateTypeImports ({
   path,

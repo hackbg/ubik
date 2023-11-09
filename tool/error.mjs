@@ -1,5 +1,10 @@
 import {bold} from '@hackbg/logs'
 
+export function required (name) {
+  throw new UbikError(`Required: ${name}`)
+  return undefined
+}
+
 export class UbikError extends Error {
 
   static ModifiedPackageJSON = class ModifiedPackageJSON extends UbikError {
@@ -49,4 +54,3 @@ export class UbikError extends Error {
   }
 
 }
-

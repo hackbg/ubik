@@ -89,7 +89,13 @@ for (const cwd of [
     assert.ok(Compile.revertModifications({ cwd, keep: true, collectedFiles: [] }))
     //assert.ok(await Publish.compileTypeScript())
     //assert.ok(await Publish.flattenFiles())
-    assert.ok(Compile.collectFiles())
+    //assert.ok(Compile.collectFiles({
+      //name:    '',
+      //srcDir:  '',
+      //distDir: '',
+      //ext1:    '',
+      //ext2:    '',
+    //}))
     assert.ok(Compile.patchPackageJson({ cwd, packageJson: { type: 'script' } }))
     assert.ok(Compile.patchPackageJson({ cwd, packageJson: { type: 'module' } }))
     assert.ok(Compile.patchESMImports({ files: [], isESModule: true  }) || true)

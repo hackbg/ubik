@@ -1,5 +1,4 @@
 import assert from 'node:assert'
-
 import { Resolver, TSFile } from '../tool/resolver.mjs'
 
 assert.throws(()=>new Resolver('./test.mjs'))

@@ -178,7 +178,7 @@ export function makeSureRunIsDry (publishArgs = []) {
 /** Determine which package manager to use: */
 export function determinePackageManager ({
   packageManager = process.env.UBIK_PACKAGE_MANAGER,
-  verbose        = process.env.UBIK_VERBOSE,
+  verbose        = !!process.env.UBIK_VERBOSE,
   yarnCheck      = 'yarn version',
   pnpmCheck      = 'pnpm --version',
 } = {}) {
