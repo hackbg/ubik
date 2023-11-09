@@ -3,6 +3,7 @@
   * along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 import assert from 'node:assert'
 import { Resolver, TSFile } from '../tool/tool-resolve.mjs'
-import { redirectToRelative } from '../task/task-merge.mjs'
+import * as Merge from '../task/task-merge.mjs'
 const resolver = new Resolver('.fixtures/merge').load(['api', 'lib', 'types'])
-redirectToRelative(resolver, ['types'])
+Merge.redirectToRelative(resolver, ['types'])
+Merge.printUsageOfMerge()

@@ -221,47 +221,58 @@ export async function collectFiles ({
 
 
 export function patchESMImports ({
+  cwd         = process.cwd(),
   files       = [],
   dryRun      = true,
   verbose     = process.env.UBIK_VERBOSE,
   ecmaVersion = process.env.UBIK_ECMA || 'module'
 }) {
   files = files.filter(x=>x.endsWith(distEsmExt))
-  console.log()
-  console.log(`Patching imports in ${files.length} ESM files...`)
-  const patched = {}
+  console.br().log(`Patching imports in ${files.length} ESM files...`)
+  let patched = {}
   for (const file of files) {
-    const src = readFileSync(file, 'utf8')
-    const ast = acorn.parse(src, {
-      sourceType: 'module',
-      //@ts-ignore
-      ecmaVersion
-    })
-    let modified = false
-    //@ts-ignore
-    const { body } = ast
-    for (const declaration of body) {
-      if (!declarationsToPatch.includes(declaration.type) || !declaration.source?.value) continue
-      const oldValue = declaration.source.value
-      const isRelative = oldValue.startsWith('./') || oldValue.startsWith('../')
-      const isNotPatched = !oldValue.endsWith(distEsmExt)
-      if (isRelative && isNotPatched) {
-        if (!modified) {
-          console.log()
-          console.log('Patching', bold(file))
-        }
-        const newValue = `${oldValue}${distEsmExt}`
-        console.log(' ', oldValue, '->', newValue)
-        Object.assign(declaration.source, { value: newValue, raw: JSON.stringify(newValue) })
-        modified = true
-      }
-    }
+    patched = patchESMImport({ patched, cwd, dryRun, file, ecmaVersion })
+  }
+  return patched
+}
 
-    if (modified) {
-      patched[file] = astring.generate(ast)
-      if (!dryRun) {
-        writeFileSync(file, patched[file], 'utf8')
+export function patchESMImport ({
+  patched     = {},
+  cwd         = process.cwd(),
+  dryRun      = true,
+  file        = required('file'),
+  source      = readFileSync(resolve(cwd, file), 'utf8'),
+  ecmaVersion = process.env.UBIK_ECMA||'latest',
+  ast         = acorn.parse(source, {
+    sourceType: 'module',
+    //@ts-ignore
+    ecmaVersion
+  })
+}) {
+  file = resolve(cwd, file)
+  let modified = false
+  //@ts-ignore
+  const { body } = ast
+  for (const declaration of body) {
+    if (!declarationsToPatch.includes(declaration.type) || !declaration.source?.value) continue
+    const oldValue = declaration.source.value
+    const isRelative = oldValue.startsWith('./') || oldValue.startsWith('../')
+    const isNotPatched = !oldValue.endsWith(distEsmExt)
+    if (isRelative && isNotPatched) {
+      if (!modified) {
+        console.br().log('Patching', bold(file))
       }
+      const newValue = `${oldValue}${distEsmExt}`
+      console.log(' ', oldValue, '->', newValue)
+      Object.assign(declaration.source, { value: newValue, raw: JSON.stringify(newValue) })
+      modified = true
+    }
+  }
+
+  if (modified) {
+    patched[file] = astring.generate(ast)
+    if (!dryRun) {
+      writeFileSync(file, patched[file], 'utf8')
     }
   }
   return patched
@@ -273,8 +284,7 @@ export function patchDTSImports ({
   dryRun  = true,
 }) {
   files = files.filter(x=>x.endsWith(distDtsExt))
-  console.log()
-  console.log(`Patching imports in ${files.length} DTS files...`)
+  console.br().log(`Patching imports in ${files.length} DTS files...`)
   const patched = {}
   for (const file of files) {
     const source = readFileSync(file, 'utf8')
@@ -288,8 +298,7 @@ export function patchDTSImports ({
       const isNotPatched = !oldValue.endsWith(distDtsExt)
       if (isRelative && isNotPatched) {
         if (!modified) {
-          console.log()
-          console.log('Patching', bold(file))
+          console.br().log('Patching', bold(file))
         }
         const newValue = `${oldValue}.dist`
         console.log(' ', oldValue, '->', newValue)
@@ -317,64 +326,74 @@ export function patchCJSRequires ({
 }) {
   files = files.filter(x=>x.endsWith(distCjsExt))
   console.log(`Patching requires in ${files.length} CJS files...`)
-  const patched = {}
+  let patched = {}
   for (const file of files) {
-    const ast = acorn.parse(readFileSync(file, 'utf8'), {
-      sourceType: 'module',
-      locations: true,
+    patched = patchCJSRequire({ patched, cwd, dryRun, file })
+  }
+  return patched
+}
+
+export function patchCJSRequire ({
+  patched     = {},
+  cwd         = process.cwd(),
+  dryRun      = true,
+  file        = required('file'),
+  source      = readFileSync(resolve(cwd, file), 'utf8'),
+  ecmaVersion = process.env.UBIK_ECMA||'latest',
+  ast         = acorn.parse(source, {
+    sourceType: 'module',
+    locations: true,
+    //@ts-ignore
+    ecmaVersion
+  })
+}) {
+  file = resolve(cwd, file)
+  let modified = false
+  acornWalk.simple(ast, {
+    CallExpression (node) {
+
       //@ts-ignore
-      ecmaVersion
-    })
+      const { callee: { type, name }, loc: { start: { line, column } } } = node
 
-    let modified = false
-    acornWalk.simple(ast, {
-      CallExpression (node) {
-
-        //@ts-ignore
-        const { callee: { type, name }, loc: { start: { line, column } } } = node
-
-        const args = node['arguments']
-        if (
-          type === 'Identifier' &&
-          name === 'require' // GOTCHA: if "require" is renamed to something else, idk
-        ) {
-          if (args.length === 1 && args[0].type === 'Literal') {
-            const value = args[0].value
-            if (value.startsWith('./') || value.startsWith('../')) {
-              const target = `${resolve(dirname(file), value)}.ts`
-              if (existsSync(target)) {
-                if (!modified) {
-                  console.log()
-                  console.log('Patching', bold(file))
-                }
-                const newValue = `${value}${distCjsExt}`
-                console.log(`  require("${value}") -> require("${newValue}")`)
-                args[0].value = newValue
-                args[0].raw = JSON.stringify(newValue)
-                modified = true
-              } else {
-                console.warn(`  require("${value}"): ${relative(cwd, target)} not found, ignoring`)
+      const args = node['arguments']
+      if (
+        type === 'Identifier' &&
+        name === 'require' // GOTCHA: if "require" is renamed to something else, idk
+      ) {
+        if (args.length === 1 && args[0].type === 'Literal') {
+          const value = args[0].value
+          if (value.startsWith('./') || value.startsWith('../')) {
+            const target = `${resolve(dirname(file), value)}.ts`
+            if (existsSync(target)) {
+              if (!modified) {
+                console.br().log('Patching', bold(file))
               }
+              const newValue = `${value}${distCjsExt}`
+              console.log(`  require("${value}") -> require("${newValue}")`)
+              args[0].value = newValue
+              args[0].raw = JSON.stringify(newValue)
+              modified = true
+            } else {
+              console.warn(`  require("${bold(value)}"): ${bold(target)} not found, ignoring`)
             }
-          } else {
-            console.warn(
-              `Dynamic or non-standard require() call encountered at ${file}:${line}:${column}. `+
-              `\n\n${recast.print(node).code}\n\n`+
-              `This library only patches calls of the format "require('./my-module')".'\n` +
-              `File an issue at https://github.com/hackbg/ubik if you need to patch ` +
-              `more complex require calls.`
-            )
           }
+        } else {
+          console.warn(
+            `Dynamic or non-standard require() call encountered at ${file}:${line}:${column}. `+
+            `\n\n${recast.print(node).code}\n\n`+
+            `This library only patches calls of the format "require('./my-module')".'\n` +
+            `File an issue at https://github.com/hackbg/ubik if you need to patch ` +
+            `more complex require calls.`
+          )
         }
-
       }
-    })
 
-    if (modified) {
-      patched[file] = astring.generate(ast)
-      if (!dryRun) {
-        writeFileSync(file, patched[file], 'utf8')
-      }
+    }
+  })
+  if (modified) {
+    patched[file] = astring.generate(ast)
+    if (!dryRun) {
+      writeFileSync(file, patched[file], 'utf8')
     }
   }
   return patched

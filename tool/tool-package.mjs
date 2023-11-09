@@ -52,8 +52,8 @@ export class ModifiedPackageJSON extends UbikError {
 
 export function patchPackageJson ({
   cwd     = process.cwd(),
-  pkgJson = readPackageJson({ cwd }),
-  forceTS = process.env.UBIK_FORCE_TS,
+  pkgJson = readPackageJson({ cwd }).pkgJson,
+  forceTS = Boolean(process.env.UBIK_FORCE_TS),
   distEsmExt,
   distCjsExt,
   distDtsExt,

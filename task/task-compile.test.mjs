@@ -3,7 +3,7 @@
   * along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 import assert from 'node:assert'
 import { fileURLToPath } from 'node:url'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import * as Compile from './task-compile.mjs'
 for (const cwd of [
   join(dirname(fileURLToPath(import.meta.url)), '../.fixtures', 'publish-esm'),
@@ -29,7 +29,16 @@ for (const cwd of [
     Compile.patchDTSImports,
     Compile.patchCJSRequires,
   ]) {
-    assert.ok(patch({ files: [] }))
+    assert(patch({ files: [] }))
   }
+
+  assert.deepEqual(Compile.patchCJSRequire({
+    cwd,
+    dryRun: true,
+    file: 'name',
+    source: `const foo = require('./lib')`,
+  }), {
+    [resolve(cwd, 'name')]: `const foo = require("./lib.dist.cjs");\n`
+  })
 
 }

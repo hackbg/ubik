@@ -18,7 +18,7 @@
   "scripts": {
     "ubik":    "./ubik.cli.mjs",
     "test":    "time ./ubik.test.mjs",
-    "cov":     "time c8 -x .fixtures -r text -r html ./ubik.test.mjs",
+    "cov":     "time c8 -x .fixtures -x '**/*.test.mjs' -r text -r html ./ubik.test.mjs",
     "check":   "tsc --noEmit",
     "release": "pnpm publish --access public --otp 123123"
   },

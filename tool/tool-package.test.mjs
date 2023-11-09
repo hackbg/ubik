@@ -37,4 +37,12 @@ for (const cwd of [
   assert(Package.readPackageJson({ cwd, pkgJson: { ubik: true }, skipFixed: true }))
 
   assert(Package.readPackageJson({ cwd, pkgJson: { private: true }, }).skip)
+
+  throws(()=>Package.patchPackageJson({
+    pkgJson: { main: "something.js" },
+    forceTS: true,
+    distEsmExt: 'asdf',
+    distCjsExt: 'qwer',
+    distDtsExt: 'xzcv',
+  }))
 }
