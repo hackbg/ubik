@@ -3,8 +3,7 @@ import { readFileSync, writeFileSync, statSync, existsSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { relative, resolve, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { console, bold } from '../tool/logger.mjs'
-import { required } from '../tool/error.mjs'
+import { console, bold, required } from '../tool/tool.mjs'
 
 const run = (cmd, ...args) => spawnSync(cmd, args, { maxBuffer: Infinity }).stdout.toString()
 

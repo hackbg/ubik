@@ -1,32 +1,15 @@
-/**
-
-  Ubik: Merge multiple packages into one
-  Copyright (C) 2023 Hack.bg
-
-  This program is free software: you can redistribute it and/or modify
-  it under the terms of the GNU Affero General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU Affero General Public License for more details.
-
-  You should have received a copy of the GNU Affero General Public License
-  along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-**/
-
+/** This is file is part of "Ubik", (c) 2023 Hack.bg, available under GNU AGPL v3.
+  * You should have received a copy of the GNU Affero General Public License
+  * along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 import { relative, dirname } from 'node:path'
 import { writeFileSync } from 'node:fs'
 import recast from 'recast'
 import { Console, bold } from '@hackbg/logs'
-import { TSFile, join } from '../tool/resolver.mjs'
+import { TSFile, join } from '../tool/tool-resolve.mjs'
 
 const console = new Console('ubik: merge packages')
 
-export default function redirectToRelative (resolver, subPackages, dry) {
+export function redirectToRelative (resolver, subPackages, dry) {
   const pkg = resolver.get('package.json')
   console.log('Merging the following packages:', ...subPackages)
   for (let path of subPackages) redirectToRelativePackage(resolver, path, dry)

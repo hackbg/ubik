@@ -1,23 +1,26 @@
-import assert from 'node:assert'
-import { Resolver, TSFile } from '../tool/resolver.mjs'
+/** This is file is part of "Ubik", (c) 2023 Hack.bg, available under GNU AGPL v3.
+  * You should have received a copy of the GNU Affero General Public License
+  * along with this program.  If not, see <http://www.gnu.org/licenses/>. */
+import assert, { throws, equal } from 'node:assert'
+import { Resolver, TSFile } from '../tool/tool-resolve.mjs'
 
-assert.throws(()=>new Resolver('./test.mjs'))
+throws(()=>new Resolver('./test.mjs'))
 
-const resolver = new Resolver('./test/fixtures')
+const resolver = new Resolver('./.fixtures')
 
-assert.equal(resolver.load(), resolver)
+equal(resolver.load(), resolver)
 
-assert.throws(()=>resolver.resolve('fixture1', './missing') instanceof TSFile)
+throws(()=>resolver.resolve('fixture1', './missing') instanceof TSFile)
 
-assert.throws(()=>resolver.resolve('fixture1', './foo.ts'))
+throws(()=>resolver.resolve('fixture1', './foo.ts'))
 
-assert.ok(resolver.resolve('fixture1', './foo') instanceof TSFile)
+assert(resolver.resolve('fixture1', './foo') instanceof TSFile)
 
-assert.equal(resolver.resolve('fixture1', 'foo'), null)
+equal(resolver.resolve('fixture1', 'foo'), null)
 
-assert.ok(resolver.resolve('fixture1', './subdir3') instanceof TSFile)
+assert(resolver.resolve('fixture1', './subdir3') instanceof TSFile)
 
-assert.ok(resolver.resolve('fixture1', './subdir1') instanceof TSFile)
+assert(resolver.resolve('fixture1', './subdir1') instanceof TSFile)
 
 let file
 
@@ -40,8 +43,8 @@ file = new TSFile(resolver, 'fixture0.ts', `
   export type { default as bar } from './bar'
   export type { bar1, bar2 } from './bar'
 `)
-assert.equal(file.patch(), file)
-assert.equal(file.save(true), `
+equal(file.patch(), file)
+equal(file.save(true), `
   import foo, { foo1, foo2 } from './foo'
 
   import type bar from './bar'
@@ -65,8 +68,8 @@ assert.equal(file.save(true), `
 file = new TSFile(resolver, 'fixture0.ts', `
   export default from './foo'
 `)
-assert.equal(file.patch(), file)
-assert.equal(file.save(true), `
+equal(file.patch(), file)
+equal(file.save(true), `
   export default from './foo'
 `)
 
@@ -74,8 +77,8 @@ assert.equal(file.save(true), `
 file = new TSFile(resolver, 'fixture0.ts', `
   export type { default as foo } from './foo'
 `)
-assert.equal(file.patch(), file)
-assert.equal(file.save(true), `
+equal(file.patch(), file)
+equal(file.save(true), `
   export type { default as foo } from './foo'
 `)
 
@@ -83,8 +86,8 @@ assert.equal(file.save(true), `
 file = new TSFile(resolver, 'fixture0.ts', `
   export { default as foo } from './foo'
 `)
-assert.equal(file.patch(), file)
-assert.equal(file.save(true), `
+equal(file.patch(), file)
+equal(file.save(true), `
   export { default as foo } from './foo'
 `)
 
@@ -92,23 +95,22 @@ assert.equal(file.save(true), `
 file = new TSFile(resolver, 'fixture0.ts', `
   import { default as foo } from 'package'
 `)
-assert.equal(file.patch(), file)
-assert.equal(file.save(true), `
+equal(file.patch(), file)
+equal(file.save(true), `
   import { default as foo } from 'package'
 `)
-
 
 file = new TSFile(resolver, 'fixture0.ts', `
   import { foo } from './missing'
 `)
-assert.throws(()=>file.patch())
+throws(()=>file.patch())
 
 
 file = new TSFile(resolver, 'fixture0.ts', `
   import { Foo, Bar, Baz } from './mixed'
 `)
-assert.equal(file.patch(), file)
-assert.equal(file.save(true), `
+equal(file.patch(), file)
+equal(file.save(true), `
   import { Foo } from './mixed';
   import type { Bar, Baz } from './mixed';
 `)
@@ -117,20 +119,20 @@ assert.equal(file.save(true), `
 file = new TSFile(resolver, 'fixture0.ts', `
   import { Foo, Bar, Baz, Quux } from './mixed'
 `)
-assert.throws(()=>file.patch())
+throws(()=>file.patch())
 
 
 file = new TSFile(resolver, 'fixture0.ts', `
   import { Foo, Bar, Baz } from './subdir3'
 `)
-assert.throws(()=>file.patch())
+throws(()=>file.patch())
 
 
 file = new TSFile(resolver, 'fixture0.ts', `
   import { Foo, Bar, Baz } from './subdir1'
 `)
-assert.equal(file.patch(), file)
-assert.equal(file.save(true), `
+equal(file.patch(), file)
+equal(file.save(true), `
   import { Foo } from "./subdir1/index";
   import type { Bar, Baz } from "./subdir1/index";
 `)
@@ -138,12 +140,13 @@ assert.equal(file.save(true), `
 file = new TSFile(resolver, 'fixture0.ts', `
   export { Foo, Bar, Baz } from './subdir1'
 `)
-assert.equal(file.patch(), file)
-assert.equal(file.save(true), `
+equal(file.patch(), file)
+equal(file.save(true), `
   export { Foo } from "./subdir1/index";
   export type { Bar, Baz } from "./subdir1/index";
 `)
 
-const case1 = new Resolver('./test/fixtures/case1')
+const case1 = new Resolver('.fixtures/case1')
 case1.load(['.'])
 console.log(case1.patch().save(true))
+

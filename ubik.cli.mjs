@@ -1,26 +1,7 @@
 #!/usr/bin/env node
-//@ts-check
-
-/**
-
-  Ubik
-  Copyright (C) 2023 Hack.bg
-
-  This program is free software: you can redistribute it and/or modify
-  it under the terms of the GNU Affero General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU Affero General Public License for more details.
-
-  You should have received a copy of the GNU Affero General Public License
-  along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-**/
-
+/** This is file is part of "Ubik", (c) 2023 Hack.bg, available under GNU AGPL v3.
+  * You should have received a copy of the GNU Affero General Public License
+  * along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 import { resolve, relative, dirname } from 'node:path'
 import { readFileSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -29,14 +10,15 @@ import fastGlob from 'fast-glob'
 
 import { Console, bold, colors } from '@hackbg/logs'
 
-import redirectToRelative, { printUsageOfMerge } from './task/merge.mjs'
-import fixImportDirs from './task/dirs.mjs'
-import { release } from './task/publish.mjs'
-import { prepareTypeScript } from './task/compile.mjs'
-import { generateImportMap } from './task/importmap.mjs'
-import { separateNamespaceImport } from './task/stars.mjs'
-
-import { Resolver } from './tool/resolver.mjs'
+import * as Task from './task/task.mjs'
+//import redirectToRelative, { printUsageOfMerge } from './task/merge.mjs'
+//import fixImportDirs from './task/dirs.mjs'
+//import { release } from './task/publish.mjs'
+//import { prepareTypeScript } from './task/compile.mjs'
+//import { generateImportMap } from './task/importmap.mjs'
+//import { separateNamespaceImport } from './task/stars.mjs'
+import * as Tool from './tool/tool.mjs'
+//import { Resolver } from './tool/resolver.mjs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -68,7 +50,7 @@ try {
         console.error('You did not provide any input directories (try "." or "./src").')
         process.exit(1)
       }
-      const resolver = new Resolver()
+      const resolver = new Tool.Resolve.Resolver()
       resolver.load(argv).patch().save(dryRun)
       break
     }
@@ -115,7 +97,7 @@ try {
         console.br()
         console.log('Patching', bold(path))
         for (const packageName of pkgs) {
-          separateNamespaceImport({ path, packageName, dryRun })
+          Task.Stars.separateNamespaceImport({ path, packageName, dryRun })
         }
       }
       break
@@ -126,52 +108,52 @@ try {
         console.error('You did not provide any input directories.')
         process.exit(1)
       }
-      const resolver = new Resolver().load(argv)
-      fixImportDirs(resolver, dryRun)
+      const resolver = new Tool.Resolve.Resolver().load(argv)
+      Task.Dirs.fixImportDirs(resolver, dryRun)
       break
     }
 
     case 'merge-package': {
       if (argv.length === 0) {
-        printUsageOfMerge()
+        Task.Merge.printUsageOfMerge()
         console.error('You did not provide any inputs.')
         process.exit(1)
       }
       const split = argv.indexOf('--')
       if (split === -1) {
-        printUsageOfMerge()
+        Task.Merge.printUsageOfMerge()
         console.error('The command line did not contain the "--" separator.')
         process.exit(1)
       }
       const pkgs = argv.slice(0, split)
       const dirs = argv.slice(split + 1)
       if (dirs.length < 1) {
-        printUsageOfMerge()
+        Task.Merge.printUsageOfMerge()
         console.error('You did not provide any packages to merge.')
         process.exit(1)
       }
       if (dirs.length < 1) {
-        printUsageOfMerge()
+        Task.Merge.printUsageOfMerge()
         console.error('You did not provide any sources to process.')
         process.exit(1)
       }
-      const resolver = new Resolver().load(dirs).load(pkgs)
-      redirectToRelative(resolver, pkgs, dryRun)
+      const resolver = new Tool.Resolve.Resolver().load(dirs).load(pkgs)
+      Task.Merge.redirectToRelative(resolver, pkgs, dryRun)
       break
     }
 
     case 'make-import-map': {
-      generateImportMap()
+      Task.ImportMap.generateImportMap()
       break
     }
 
     case 'compile': {
-      await prepareTypeScript({ dryRun, cwd: process.cwd(), keep: true })
+      await Task.Compile.prepareTypeScript({ dryRun, cwd: process.cwd(), keep: true })
       break
     }
 
     case 'publish': {
-      await release({ dryRun, cwd: process.cwd(), args: argv })
+      await Task.Publish.release(process.cwd(), { dryRun, args: argv })
       break
     }
 

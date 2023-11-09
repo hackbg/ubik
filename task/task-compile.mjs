@@ -1,29 +1,11 @@
-/**
-
-  Ubik: Compile TypeScript and patch extensions
-  Copyright (C) 2023 Hack.bg
-
-  This program is free software: you can redistribute it and/or modify
-  it under the terms of the GNU Affero General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU Affero General Public License for more details.
-
-  You should have received a copy of the GNU Affero General Public License
-  along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-**/
-
+/** This is file is part of "Ubik", (c) 2023 Hack.bg, available under GNU AGPL v3.
+  * You should have received a copy of the GNU Affero General Public License
+  * along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 import { resolve, basename, dirname, relative, join, isAbsolute } from 'node:path'
 import { existsSync, readFileSync, writeFileSync, copyFileSync, unlinkSync } from 'node:fs'
 import { exec, execSync, execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import process from 'node:process'
-import { promisify } from 'node:util'
 
 import { rimraf } from 'rimraf'
 import { mkdirpSync } from 'mkdirp'
@@ -34,17 +16,13 @@ import * as astring from 'astring'
 import fastGlob from 'fast-glob'
 
 import { recastTS } from '../shims.cjs'
-import { UbikError, required } from '../tool/error.mjs'
-import { console, bold } from '../tool/logger.mjs'
-import { readPackageJson } from '../tool/packager.mjs'
-
-const execPromise = promisify(exec)
+import { required, console, bold, Package, runConcurrently } from '../tool/tool.mjs'
 
 if (process.env.UBIK_VERBOSE) console.warn(`Remembering the Node16/TS4 ESM crisis of April 2022...`)
 
-const distDtsExt = '.dist.d.ts'
-const distEsmExt = '.dist.mjs'
-const distCjsExt = '.dist.cjs'
+export const distDtsExt = '.dist.d.ts'
+export const distEsmExt = '.dist.mjs'
+export const distCjsExt = '.dist.cjs'
 const distJsExt  = '.dist.js'
 const distExts   = [distDtsExt, distEsmExt, distCjsExt, distJsExt]
 const declarationsToPatch = [
@@ -56,31 +34,30 @@ const declarationsToPatch = [
 ]
 
 export async function prepareTypeScript ({
-  cwd = process.cwd(),
-  packageJson = readPackageJson({ cwd }).packageJson,
-  args = [],
-  dtsOut = 'dist/dts',
-  esmOut = 'dist/esm',
-  cjsOut = 'dist/cjs',
-  keep = false,
-  dryRun = true,
+  cwd     = process.cwd(),
+  pkgJson = Package.readPackageJson({ cwd }).pkgJson,
+  args    = [],
+  dtsOut  = 'dist/dts',
+  esmOut  = 'dist/esm',
+  cjsOut  =  'dist/cjs',
+  keep    = false,
+  dryRun  = true,
 } = {}) {
-  packageJson.ubik = true
+  pkgJson.ubik = true
   await compileTypeScript({ cwd, dtsOut, esmOut, cjsOut })
   let distFiles = new Set()
   try {
-    distFiles = await flattenFiles({ cwd, packageJson, dtsOut, esmOut, cjsOut })
-    await patchPackageJson({ cwd, packageJson })
-    await patchESMImports({ dryRun, files: packageJson.files })
-    await patchDTSImports({ dryRun, files: packageJson.files })
-    await patchCJSRequires({ cwd, dryRun, files: packageJson.files })
+    distFiles = await flattenFiles({ cwd, pkgJson, dtsOut, esmOut, cjsOut })
+    await Package.patchPackageJson({ cwd, pkgJson, distDtsExt, distEsmExt, distCjsExt })
+    await patchESMImports({ dryRun, files: pkgJson.files })
+    await patchDTSImports({ dryRun, files: pkgJson.files })
+    await patchCJSRequires({ cwd, dryRun, files: pkgJson.files })
     if (dryRun) {
-      console.info("Published package.json would be:")
-      console.info(JSON.stringify(packageJson, null, 2))
+      console.info(`Published package.json would be:\n${JSON.stringify(pkgJson, null, 2)}`)
     } else {
       console.log("Backing up package.json to package.json.bak")
       copyFileSync(join(cwd, 'package.json'), join(cwd, 'package.json.bak'))
-      writeFileSync(join(cwd, 'package.json'), JSON.stringify(packageJson, null, 2), 'utf8')
+      writeFileSync(join(cwd, 'package.json'), JSON.stringify(pkgJson, null, 2), 'utf8')
     }
   } catch (e) {
     revertModifications({ cwd, keep: false, distFiles })
@@ -89,44 +66,14 @@ export async function prepareTypeScript ({
   return distFiles
 }
 
-/** Remove output files */
-export function cleanFiles () {
-  const { log, warn } = console.sub('(cleanup)')
-  return Promise.all(distExts.map(ext=>
-    fastGlob([
-      '!node_modules',
-      '!**/node_modules',
-      `${cwd}/*${ext}`,
-      `${cwd}/**/*${ext}`
-    ]).then(names=>
-      Promise.all(names.map(name=>
-        new Promise(resolve=>rimraf(name, resolve))
-          .then(()=>log('Deleted', name))
-          .catch(()=>warn(`Failed to delete`, name)))))))
-}
-
-/** Remove output */
-export async function cleanAll ({
-  cwd
-}) {
-  cleanDirs()
-  await cleanFiles()
-  if (existsSync(join(cwd, 'package.json.bak'))) {
-    console.log('Restoring package.json from package.json.bak')
-    unlinkSync(join(cwd, 'package.json'))
-    copyFileSync(join(cwd, 'package.json.bak'), join(cwd, 'package.json'))
-    unlinkSync(join(cwd, 'package.json.bak'))
-  }
-}
-
 /** Restore the original package.json and remove the dist files */
 export function revertModifications ({
-  cwd = process.cwd(),
-  keep = false,
+  cwd       = process.cwd(),
+  keep      = false,
   distFiles = new Set(),
-  dtsOut = 'dist/dts',
-  esmOut = 'dist/esm',
-  cjsOut = 'dist/cjs',
+  dtsOut    = 'dist/dts',
+  esmOut    = 'dist/esm',
+  cjsOut    = 'dist/cjs',
 } = {}) {
 
   if (keep) {
@@ -155,7 +102,9 @@ export function revertModifications ({
 
   console.log('Deleting generated files...')
   ;[dtsOut, esmOut, cjsOut].map(out=>rimraf.sync(out))
-  for (const file of distFiles) unlinkSync(file)
+  for (const file of distFiles) {
+    unlinkSync(file)
+  }
 
   return true
 
@@ -184,11 +133,11 @@ export async function compileTypeScript ({
 }
 
 export async function flattenFiles ({
-  cwd         = process.cwd(),
-  packageJson = readPackageJson({ cwd }).packageJson,
-  dtsOut      = 'dist/dts',
-  esmOut      = 'dist/esm',
-  cjsOut      = 'dist/cjs',
+  cwd     = process.cwd(),
+  pkgJson = Package.readPackageJson({ cwd }).pkgJson,
+  dtsOut  = 'dist/dts',
+  esmOut  = 'dist/esm',
+  cjsOut  = 'dist/cjs',
 }) {
   // Files given new locations by the flattening.
   // Deleted after publication - unless you run `ubik fix`, which keeps them around.
@@ -202,7 +151,7 @@ export async function flattenFiles ({
       cwd,
       distFiles,
       name: 'ESM',
-      srcDir: dirname(packageJson.main),
+      srcDir: dirname(pkgJson.main),
       distDir: esmOut,
       ext1: '.js',
       ext2: distEsmExt,
@@ -212,7 +161,7 @@ export async function flattenFiles ({
       cwd,
       distFiles,
       name: 'CJS',
-      srcDir: dirname(packageJson.main),
+      srcDir: dirname(pkgJson.main),
       distDir: cjsOut,
       ext1: '.js',
       ext2: distCjsExt,
@@ -222,7 +171,7 @@ export async function flattenFiles ({
       cwd,
       distFiles,
       name: 'DTS',
-      srcDir: dirname(packageJson.main),
+      srcDir: dirname(pkgJson.main),
       distDir: dtsOut,
       ext1: '.d.ts',
       ext2: distDtsExt,
@@ -230,16 +179,13 @@ export async function flattenFiles ({
 
   ]
 
-  packageJson.files = [...new Set([...packageJson.files||[], ...files])].sort()
+  pkgJson.files = [...new Set([...pkgJson.files||[], ...files])].sort()
 
   console.log('Removing dist directories...')
   ;[dtsOut, esmOut, cjsOut].map(out=>rimraf.sync(out))
 
   return distFiles
 }
-
-// Changes x.a to x.b:
-const replaceExtension = (x, a, b) => join(dirname(x), `${basename(x, a)}${b}`)
 
 export async function collectFiles ({
   cwd       = process.cwd(),
@@ -262,9 +208,9 @@ export async function collectFiles ({
   for (const file of inputs) {
     if (!file.endsWith(ext1)) continue
     const srcFile = join(cwd, file)
-    const newFile = replaceExtension(join(srcDir, relative(distDir, file)), ext1, ext2)
+    const newFile = Package.replaceExtension(join(srcDir, relative(distDir, file)), ext1, ext2)
     mkdirpSync(dirname(newFile))
-    log(`  ${toRel(cwd, srcFile)} -> ${toRel(cwd, newFile)}`)
+    log(`  ${Package.toRel(cwd, srcFile)} -> ${Package.toRel(cwd, newFile)}`)
     copyFileSync(srcFile, newFile)
     unlinkSync(srcFile)
     outputs.push(newFile)
@@ -273,49 +219,12 @@ export async function collectFiles ({
   return outputs
 }
 
-export function patchPackageJson ({
-  cwd = process.cwd(),
-  packageJson,
-  forceTS = process.env.UBIK_FORCE_TS
-}) {
-  const main        = join(cwd, packageJson.main    || 'index.ts')
-  const browserMain = join(cwd, packageJson.browser || 'index.browser.ts') // TODO
-  // Set "main", "types", and "exports" in package.json.
-  const esmMain = replaceExtension(main, '.ts', distEsmExt)
-  const cjsMain = replaceExtension(main, '.ts', distCjsExt)
-  const dtsMain = replaceExtension(main, '.ts', distDtsExt)
-  packageJson.types = toRel(cwd, dtsMain)
-  packageJson.exports ??= {}
-  if (forceTS && packageJson.main.endsWith('.js')) {
-    console.error(
-      `${bold('UBIK_FORCE_TS')} is on, but "main" has "js" extension.`,
-      bold('Make "main" point to the TS index')
-    )
-    throw new UbikError.WrongMainExtension()
-  }
-  if (packageJson.type === 'module') {
-    packageJson.main = toRel(cwd, esmMain)
-    packageJson.exports["."] = {
-      "source":  toRel(cwd, main),
-      "require": toRel(cwd, cjsMain),
-      "default": toRel(cwd, esmMain)
-    }
-  } else {
-    packageJson.main = toRel(cwd, esmMain)
-    packageJson.exports["."] = {
-      "source":  toRel(cwd, main),
-      "import":  toRel(cwd, esmMain),
-      "default": toRel(cwd, cjsMain)
-    }
-  }
-  return packageJson
-}
 
 export function patchESMImports ({
   files       = [],
   dryRun      = true,
   verbose     = process.env.UBIK_VERBOSE,
-  ecmaVersion = process.env.UBIK_ECMA || 'latest'
+  ecmaVersion = process.env.UBIK_ECMA || 'module'
 }) {
   files = files.filter(x=>x.endsWith(distEsmExt))
   console.log()
@@ -323,10 +232,15 @@ export function patchESMImports ({
   const patched = {}
   for (const file of files) {
     const src = readFileSync(file, 'utf8')
-    const ast = acorn.parse(src, { ecmaVersion, sourceType: 'module' })
-
+    const ast = acorn.parse(src, {
+      sourceType: 'module',
+      //@ts-ignore
+      ecmaVersion
+    })
     let modified = false
-    for (const declaration of ast.body) {
+    //@ts-ignore
+    const { body } = ast
+    for (const declaration of body) {
       if (!declarationsToPatch.includes(declaration.type) || !declaration.source?.value) continue
       const oldValue = declaration.source.value
       const isRelative = oldValue.startsWith('./') || oldValue.startsWith('../')
@@ -395,26 +309,30 @@ export function patchDTSImports ({
 }
 
 export function patchCJSRequires ({
-  cwd     = process.cwd(),
-  files   = [],
-  verbose = process.env.UBIK_VERBOSE,
-  dryRun  = true,
+  cwd         = process.cwd(),
+  files       = [],
+  verbose     = process.env.UBIK_VERBOSE,
+  dryRun      = true,
+  ecmaVersion = process.env.UBIK_ECMA||'latest'
 }) {
   files = files.filter(x=>x.endsWith(distCjsExt))
   console.log(`Patching requires in ${files.length} CJS files...`)
   const patched = {}
   for (const file of files) {
     const ast = acorn.parse(readFileSync(file, 'utf8'), {
-      ecmaVersion: process.env.UBIK_ECMA||'latest',
       sourceType: 'module',
-      locations:  true
+      locations: true,
+      //@ts-ignore
+      ecmaVersion
     })
 
     let modified = false
-
     acornWalk.simple(ast, {
       CallExpression (node) {
+
+        //@ts-ignore
         const { callee: { type, name }, loc: { start: { line, column } } } = node
+
         const args = node['arguments']
         if (
           type === 'Identifier' &&
@@ -460,26 +378,4 @@ export function patchCJSRequires ({
     }
   }
   return patched
-}
-
-export async function runConcurrently ({
-  cwd      = process.cwd(),
-  commands = [],
-  verbose  = process.env.UBIK_VERBOSE
-}) {
-  console.log(`Running ${bold(commands.length)} commands in ${bold(cwd)}:`)
-  commands.forEach(command=>console.log(' ', command))
-  try {
-    return await Promise.all(commands.map(
-      command=>execPromise(command, { cwd, stdio: 'inherit' })
-    ))
-  } catch (e) {
-    process.stdout.write(e.stdout)
-    throw new UbikError.RunFailed(commands)
-  }
-}
-
-// Convert absolute path to relative
-export function toRel (cwd, path) {
-  return `./${isAbsolute(path)?relative(cwd, path):path}`
 }

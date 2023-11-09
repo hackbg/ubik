@@ -24,10 +24,10 @@ function doSomethingMoreComplex (x: {
   baz: _foo.Baz
 } {
   return {
-    bar: null as foo.Bar,
+    bar: null as _foo.Bar,
     baz: {
-      bar: null as foo.Bar,
-      baz: null as foo.Baz,
+      bar: null as _foo.Bar,
+      baz: null as _foo.Baz,
     }
-  }
+  };
 }

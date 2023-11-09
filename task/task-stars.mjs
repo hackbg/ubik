@@ -1,27 +1,10 @@
-/**
-
-  Ubik: Split import of TS/CommonJS module into namespace and default import
-  Copyright (C) 2023 Hack.bg
-
-  This program is free software: you can redistribute it and/or modify
-  it under the terms of the GNU Affero General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU Affero General Public License for more details.
-
-  You should have received a copy of the GNU Affero General Public License
-  along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-**/
-
+/** This is file is part of "Ubik", (c) 2023 Hack.bg, available under GNU AGPL v3.
+  * You should have received a copy of the GNU Affero General Public License
+  * along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 import { readFileSync, writeFileSync } from 'node:fs'
 import recast from 'recast'
 import { recastTS } from '../shims.cjs'
-import { console, bold } from '../tool/logger.mjs'
+import { console, bold } from '../tool/tool.mjs'
 
 const parse = source => recast.parse(source, { parser: recastTS })
 
