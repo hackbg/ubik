@@ -35,6 +35,9 @@ export default function redirectToRelative (resolver, subPackages, dry) {
 export function redirectToRelativePackage (resolver, path, dry) {
   path = `${path}/package.json`
   const subPkg = resolver.get(path)
+  if (!subPkg) {
+    throw new Error(`missing: ${path}`)
+  }
   const { name } = subPkg.parse()
   const prefix = `${name}/`
   path = join(resolver.root, path)

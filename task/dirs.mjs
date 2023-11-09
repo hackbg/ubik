@@ -101,7 +101,7 @@ function enforceFileSpecifier (resolver, entry, specifier) {
     }
   } else if (specifier.startsWith('.')) {
     // Throw if a relative import was not found.
-    throw new Error(`failed resolving ${target} from ${path}`)
+    throw new Error(`failed resolving ${specifier} from ${entry.path}`)
   }
   return specifier
 }
@@ -123,6 +123,6 @@ export function addDirectorySuffix (resolver, path, declaration) {
     }
   } else if (declaration.value.source.value.startsWith('.')) {
     // Throw if a relative import was not found.
-    throw new Error(`failed resolving ${target} from ${path}`)
+    throw new Error(`failed resolving ${declaration.value.source.value} from ${path}`)
   }
 }

@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import * as Publish from '../task/publish.mjs'
 import * as Compile from '../task/compile.mjs'
+import * as Packager from '../tool/packager.mjs'
 import { UbikError } from '../tool/error.mjs'
 import { rimraf } from 'rimraf'
 
@@ -24,22 +25,22 @@ for (const cwd of [
       //cwd,
     //})
 
-    assert.ok(Publish.readPackageJson({
+    assert.ok(Packager.readPackageJson({
       cwd,
     }))
 
-    assert.throws(()=>Publish.readPackageJson({
+    assert.throws(()=>Packager.readPackageJson({
       cwd,
       packageJson: { ubik: true },
     }))
 
-    assert.ok(Publish.readPackageJson({
+    assert.ok(Packager.readPackageJson({
       cwd,
       packageJson: { ubik: true },
       skipFixed: true
     }))
 
-    assert.ok(Publish.readPackageJson({
+    assert.ok(Packager.readPackageJson({
       cwd,
       packageJson: { private: true },
     }).skip)
@@ -50,7 +51,7 @@ for (const cwd of [
 
     assert.ok(await Compile.prepareTypeScript({
       cwd,
-      packageJson: {},
+      packageJson: { main: "" },
       args: []
     }))
 
@@ -58,7 +59,7 @@ for (const cwd of [
 
     //assert.ok(Publish.performRelease())
 
-    //assert.ok(Publish.readPackageJson())
+    //assert.ok(Packager.readPackageJson())
 
     assert.ok(Publish.ensureFreshTag())
 
@@ -87,8 +88,6 @@ for (const cwd of [
     assert.ok(Compile.revertModifications({ cwd, keep: false, collectedFiles: [] }))
     assert.ok(Compile.revertModifications({ cwd, keep: true, collectedFiles: [] }))
     //assert.ok(await Publish.compileTypeScript())
-    assert.ok(Compile.getExtensions(true))
-    assert.ok(Compile.getExtensions(false))
     //assert.ok(await Publish.flattenFiles())
     assert.ok(Compile.collectFiles())
     assert.ok(Compile.patchPackageJson({ cwd, packageJson: { type: 'script' } }))

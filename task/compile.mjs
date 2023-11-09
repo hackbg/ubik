@@ -56,7 +56,7 @@ const declarationsToPatch = [
 ]
 
 export async function prepareTypeScript ({
-  cwd,
+  cwd = process.cwd(),
   packageJson = readPackageJson({ cwd }).packageJson,
   args = [],
   dtsOut = 'dist/dts',

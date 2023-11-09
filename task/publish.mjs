@@ -43,7 +43,7 @@ export function printPublishUsage () {
 
 /** Perform a release. */
 export async function release ({
-  cwd,
+  cwd = process.cwd(),
   /** Whether to keep the modified package.json and dist files */
   keep = false,
   /** Whether to actually publish to NPM, or just go through the movements ("dry run")  */
@@ -109,7 +109,7 @@ export async function release ({
 }
 
 export function performRelease ({
-  cwd,
+  cwd = process.cwd(),
   npm = determinePackageManager(),
   args = []
 } = {}) {
@@ -118,8 +118,8 @@ export function performRelease ({
 }
 
 export function tagRelease ({
-  cwd,
-  tag,
+  cwd = process.cwd(),
+  tag = undefined,
   noTag  = process.env.UBIK_NO_TAG  || false,
   noPush = process.env.UBIK_NO_PUSH || false,
   git = 'git'

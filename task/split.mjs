@@ -135,7 +135,8 @@ export function addTypeSection (
       return true
     }
     // Extract imports that resolve to types:
-    if (newTypes && newTypes.has(specifier.local.name)) {
+    console.log(specifier)
+    if (newTypes && newTypes.has(specifier.local?.name)) {
       typeSpecifiers.push(specifier)
       return false
     }
