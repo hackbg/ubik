@@ -33,32 +33,30 @@ for (const cwd of [
   }
 
   assert.deepEqual(Compile.patchESMImport({
-    cwd,
-    dryRun: true,
-    file: 'name',
-    source: `import foo from './lib'`,
+    cwd, dryRun: true, file: 'name', source: `import foo from './lib'`,
   }), {
     [resolve(cwd, 'name')]: `import foo from "./lib.dist.mjs";\n`
   })
+
+  assert.deepEqual(Compile.patchDTSImport({
+    cwd, dryRun: true, file: 'name', source: `import foo from './lib'`,
+  }), {
+    [resolve(cwd, 'name')]: `import foo from "./lib.dist"`
+  })
+
   assert.deepEqual(Compile.patchCJSRequire({
-    cwd,
-    dryRun: true,
-    file: 'name',
-    source: `const foo = require('./lib')`,
+    cwd, dryRun: true, file: 'name', source: `const foo = require('./lib')`,
   }), {
     [resolve(cwd, 'name')]: `const foo = require("./lib.dist.cjs");\n`
   })
+
   assert.deepEqual(Compile.patchCJSRequire({
-    cwd,
-    dryRun: true,
-    file: 'name',
-    source: `const foo = require('./lib-missing')`,
+    cwd, dryRun: true, file: 'name', source: `const foo = require('./lib-missing')`,
   }), {})
+
   assert.deepEqual(Compile.patchCJSRequire({
-    cwd,
-    dryRun: true,
-    file: 'name',
-    source: `const foo = require('./lib'+dynamic)`,
+    cwd, dryRun: true, file: 'name', source: `const foo = require('./lib'+dynamic)`,
   }), {})
+
 
 }

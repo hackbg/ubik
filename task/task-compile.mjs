@@ -280,38 +280,49 @@ export function patchESMImport ({
 
 export function patchDTSImports ({
   files,
+  cwd     = process.cwd(),
   verbose = process.env.UBIK_VERBOSE,
   dryRun  = true,
 }) {
   files = files.filter(x=>x.endsWith(distDtsExt))
   console.br().log(`Patching imports in ${files.length} DTS files...`)
-  const patched = {}
+  let patched = {}
   for (const file of files) {
-    const source = readFileSync(file, 'utf8')
-    const parsed = recast.parse(source, { parser: recastTS })
+    patched = patchDTSImport({ patched, cwd, dryRun, file })
+  }
+  return patched
+}
 
-    let modified = false
-    for (const declaration of parsed.program.body) {
-      if (!declarationsToPatch.includes(declaration.type) || !declaration.source?.value) continue
-      const oldValue = declaration.source.value
-      const isRelative = oldValue.startsWith('./') || oldValue.startsWith('../')
-      const isNotPatched = !oldValue.endsWith(distDtsExt)
-      if (isRelative && isNotPatched) {
-        if (!modified) {
-          console.br().log('Patching', bold(file))
-        }
-        const newValue = `${oldValue}.dist`
-        console.log(' ', oldValue, '->', newValue)
-        Object.assign(declaration.source, { value: newValue, raw: JSON.stringify(newValue) })
-        modified = true
+export function patchDTSImport ({
+  patched = {},
+  cwd     = process.cwd(),
+  dryRun  = true,
+  file    = required('file'),
+  source  = readFileSync(resolve(cwd, file), 'utf8'),
+  parsed  = recast.parse(source, { parser: recastTS })
+}) {
+  file = resolve(cwd, file)
+  let modified = false
+  for (const declaration of parsed.program.body) {
+    if (!declarationsToPatch.includes(declaration.type) || !declaration.source?.value) continue
+    const oldValue = declaration.source.value
+    const isRelative = oldValue.startsWith('./') || oldValue.startsWith('../')
+    const isNotPatched = !oldValue.endsWith(distDtsExt)
+    if (isRelative && isNotPatched) {
+      if (!modified) {
+        console.br().log('Patching', bold(file))
       }
+      const newValue = `${oldValue}.dist`
+      console.log(' ', oldValue, '->', newValue)
+      Object.assign(declaration.source, { value: newValue, raw: JSON.stringify(newValue) })
+      modified = true
     }
+  }
 
-    if (modified) {
-      patched[file] = recast.print(parsed).code
-      if (!dryRun) {
-        writeFileSync(file, patched[file], 'utf8')
-      }
+  if (modified) {
+    patched[file] = recast.print(parsed).code
+    if (!dryRun) {
+      writeFileSync(file, patched[file], 'utf8')
     }
   }
   return patched
