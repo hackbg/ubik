@@ -5,6 +5,7 @@ import { relative, dirname } from 'node:path'
 import { writeFileSync } from 'node:fs'
 import recast from 'recast'
 import { Console, bold } from '@hackbg/logs'
+import { UbikError, required } from '../tool/tool-error.mjs'
 import { TSFile, join } from '../tool/tool-resolve.mjs'
 
 const console = new Console('ubik: merge packages')
@@ -12,22 +13,28 @@ const console = new Console('ubik: merge packages')
 export function redirectToRelative (resolver, subPackages, dry) {
   const pkg = resolver.get('package.json')
   console.log('Merging the following packages:', ...subPackages)
-  for (let path of subPackages) redirectToRelativePackage(resolver, path, dry)
+  for (let path of subPackages) redirectToRelativePackage({
+    resolver, path, dry
+  })
 }
 
-export function redirectToRelativePackage (resolver, path, dry) {
+export function redirectToRelativePackage ({
+  resolver = required('resolver'),
+  path     = required('path'),
+  dry      = true
+}) {
   path = `${path}/package.json`
   const subPkg = resolver.get(path)
   if (!subPkg) {
-    throw new Error(`missing: ${path}`)
+    throw new UbikError(`missing in resolver: ${path}`)
   }
-  const { name } = subPkg.parse()
+  const { name = required(`name (in ${path})`) } = subPkg.parse()
   const prefix = `${name}/`
   path = join(resolver.root, path)
 
   resolver.forEach(entry => {
     if (!(entry instanceof TSFile)) return
-    redirectToRelativePackageEntry(resolver, name, path, prefix, entry)
+    redirectToRelativePackageEntry({ resolver, name, path, prefix, entry })
   })
 
   resolver.forEach(entry => {
@@ -42,29 +49,44 @@ export function redirectToRelativePackage (resolver, path, dry) {
   })
 }
 
-export function redirectToRelativePackageEntry (resolver, name, path, prefix, entry) {
-  recast.visit(entry.parsed, { visitImportDeclaration, visitExportNamedDeclaration })
-
-  function visitImportDeclaration (declaration) {
-    const oldSpecifier = declaration.value.source.value
-    const newSpecifier = getRelativeSpecifier(resolver, entry, path, prefix, oldSpecifier)
-    markIfModified(entry, name, oldSpecifier, newSpecifier)
-    declaration.value.source.value = newSpecifier
-    return false
-  }
-
-  function visitExportNamedDeclaration (declaration) {
-    if (declaration.value.source) {
+export function redirectToRelativePackageEntry ({
+  resolver = required('resolver'),
+  name     = required('name'),
+  path     = required('path'),
+  prefix   = required('prefix'),
+  entry    = required('entry { path, parsed }')
+}) {
+  recast.visit(entry.parsed, {
+    visitImportDeclaration (declaration) {
       const oldSpecifier = declaration.value.source.value
-      const newSpecifier = getRelativeSpecifier(resolver, entry, path, prefix, oldSpecifier)
+      const newSpecifier = getRelativeSpecifier({
+        resolver, entry, path, prefix, specifier: oldSpecifier
+      })
       markIfModified(entry, name, oldSpecifier, newSpecifier)
       declaration.value.source.value = newSpecifier
+      return false
+    },
+    visitExportNamedDeclaration (declaration) {
+      if (declaration.value.source) {
+        const oldSpecifier = declaration.value.source.value
+        const newSpecifier = getRelativeSpecifier({
+          resolver, entry, path, prefix, specifier: oldSpecifier
+        })
+        markIfModified(entry, name, oldSpecifier, newSpecifier)
+        declaration.value.source.value = newSpecifier
+      }
+      return false
     }
-    return false
-  }
+  })
 }
 
-function getRelativeSpecifier (resolver, entry, path, prefix, specifier) {
+export function getRelativeSpecifier ({
+  resolver  = required('resolver'),
+  entry     = required('entry { path, parsed }'),
+  path      = required('path'),
+  prefix    = required('prefix'),
+  specifier = required('specifier'),
+} = {}) {
   if (specifier.startsWith(prefix)) {
     let subPrefix = relative(dirname(entry.path), resolver.root)
     const isRelative = (subPrefix === '..' || subPrefix.startsWith('../'))
@@ -77,7 +99,7 @@ function getRelativeSpecifier (resolver, entry, path, prefix, specifier) {
   return specifier
 }
 
-function markIfModified (entry, name, specifier, newSpecifier) {
+export function markIfModified (entry, name, specifier, newSpecifier) {
   if ((newSpecifier !== specifier) && !entry.modified) {
     console.log('replacing', bold(name), 'in', bold(entry.path))
     entry.modified = true

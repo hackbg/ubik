@@ -4,7 +4,7 @@
 import { bold } from '@hackbg/logs'
 
 export function required (name) {
-  throw new UbikError(`Required: ${bold(name)}`)
+  throw new UbikError(`Required parameter missing: ${bold(name)}`)
   return undefined
 }
 

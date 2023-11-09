@@ -15,6 +15,7 @@ export async function runConcurrently ({
 }) {
   console.log(`Running ${bold(commands.length)} commands in ${bold(cwd)}:`)
   commands.forEach(command=>console.log(' ', command))
+  let result
   try {
     return await Promise.all(commands.map(
       command=>execPromise(command, Object.assign({ cwd }, { stdio: 'inherit' }))

@@ -4,6 +4,34 @@
 import assert from 'node:assert'
 import { Resolver, TSFile } from '../tool/tool-resolve.mjs'
 import * as Merge from '../task/task-merge.mjs'
-const resolver = new Resolver('.fixtures/merge').load(['api', 'lib', 'types'])
-Merge.redirectToRelative(resolver, ['types'])
+import { fixture } from '../.fixtures/fixtures.mjs'
+
 Merge.printUsageOfMerge()
+
+Merge.markIfModified()
+
+const resolver = new Resolver('.fixtures/merge').load(['api', 'lib', 'types'])
+
+Merge.getRelativeSpecifier({
+  resolver,
+  entry:     { path: '', parsed: '' },
+  path:      '',
+  prefix:    '',
+  specifier: '',
+})
+
+Merge.redirectToRelativePackageEntry({
+  resolver,
+  entry:     { path: '', parsed: '' },
+  name:      '',
+  path:      '',
+  prefix:    '',
+})
+
+Merge.redirectToRelativePackage({
+  resolver,
+  path: 'types',
+  dry: true
+})
+
+Merge.redirectToRelative(resolver, ['types'])
