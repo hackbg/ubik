@@ -1,6 +1,7 @@
 {
   "include": [ "*.cjs", "*.mjs", "task/*", "tool/*", "test/*" ],
   "compilerOptions": {
+    "composite": true,
     "target": "esnext",
     "module": "esnext",
     "moduleResolution": "node10",
