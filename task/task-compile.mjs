@@ -62,17 +62,17 @@ export async function prepareTypeScript ({
     onError('patchPackageJson')(e)
   }
   try {
-    patchESMImports({ dryRun, files: pkgJson.files })
+    patchAll(distEsmExt, patchESMImport, { cwd, dryRun, files: pkgJson.files })
   } catch (e) {
     onError('patchESMImports')(e)
   }
   try {
-    patchDTSImports({ dryRun, files: pkgJson.files })
+    patchAll(distDtsExt, patchDTSImport, { dryRun, files: pkgJson.files })
   } catch (e) {
     onError('patchDTSImports')(e)
   }
   try {
-    patchCJSRequires({ cwd, dryRun, files: pkgJson.files })
+    patchAll(distCjsExt, patchCJSRequire, { cwd, dryRun, files: pkgJson.files })
   } catch (e) {
     onError('patchCJSRequires')(e)
   }
@@ -190,7 +190,7 @@ export async function flattenFiles ({
     ext1: '.d.ts', ext2: distDtsExt,
   })
 
-  pkgJson.files = [...new Set([...pkgJson.files||[], ...distFiles])].sort()
+  pkgJson.files = [...[...distFiles].sort(), ...pkgJson.files||[]]
 
   console
     .br()
@@ -239,39 +239,23 @@ export async function collectFiles ({
   return outputs
 }
 
-
-export function patchESMImports ({
+export function patchAll (ext, patch, {
   cwd         = process.cwd(),
   files       = [],
   dryRun      = true,
   verbose     = process.env.UBIK_VERBOSE,
   ecmaVersion = process.env.UBIK_ECMA || 'module'
 }) {
-  files = files.filter(x=>x.endsWith(distEsmExt))
-  console.br().log(`Patching imports in ${files.length} ESM files...`)
+  files = files.filter(x=>x.endsWith(ext))
+  console.br().log(`Patching ${files.length} ${ext} files with ${patch.name}`)
   let patched = {}
-  for (const file of files) {
-    console.log('Patching', bold(file))
-    patched = patchESMImport({ patched, cwd, dryRun, file, ecmaVersion })
+  for (let i = 0; i < files.length; i++) {
+    patched = patch({
+      ecmaVersion, patched, cwd, dryRun,
+      file: files[i], index: i+1, total: files.length
+    })
   }
   return patched
-}
-
-function acornParse (name, source) {
-  const ecmaVersion = process.env.UBIK_ECMA||'latest'
-  try {
-    return acorn.parse(source, {
-      sourceType: 'module',
-      locations: true,
-      //@ts-ignore
-      ecmaVersion
-    })
-  } catch (e) {
-    console.br()
-      .error('Failed to parse', bold(name))
-      .error(bold(e.message), 'at', e.loc.line, ':', e.loc.column)
-      .error(`Source:\n${source}`)
-  }
 }
 
 export function patchESMImport ({
@@ -281,7 +265,9 @@ export function patchESMImport ({
   file        = required('file'),
   source      = readFileSync(resolve(cwd, file), 'utf8'),
   ecmaVersion = process.env.UBIK_ECMA||'latest',
-  ast         = acornParse(file, source)
+  ast         = acornParse(file, source),
+  index = 0,
+  total = 0,
 }) {
   file = resolve(cwd, file)
   let modified = false
@@ -294,10 +280,10 @@ export function patchESMImport ({
     const isNotPatched = !oldValue.endsWith(distEsmExt)
     if (isRelative && isNotPatched) {
       if (!modified) {
-        console.br().log('Patching', bold(file))
+        console.log(`(${index}/${total})`, 'Patching', bold(file))
       }
       const newValue = `${oldValue}${distEsmExt}`
-      console.log(' ', oldValue, '->', newValue)
+      console.debug(' ', oldValue, '->', newValue)
       Object.assign(declaration.source, { value: newValue, raw: JSON.stringify(newValue) })
       modified = true
     }
@@ -312,28 +298,16 @@ export function patchESMImport ({
   return patched
 }
 
-export function patchDTSImports ({
-  files,
-  cwd     = process.cwd(),
-  verbose = process.env.UBIK_VERBOSE,
-  dryRun  = true,
-}) {
-  files = files.filter(x=>x.endsWith(distDtsExt))
-  console.br().log(`Patching imports in ${files.length} DTS files...`)
-  let patched = {}
-  for (const file of files) {
-    patched = patchDTSImport({ patched, cwd, dryRun, file })
-  }
-  return patched
-}
-
 export function patchDTSImport ({
   patched = {},
   cwd     = process.cwd(),
   dryRun  = true,
   file    = required('file'),
   source  = readFileSync(resolve(cwd, file), 'utf8'),
-  parsed  = recast.parse(source, { parser: recastTS })
+  parsed  = recast.parse(source, { parser: recastTS }),
+  ecmaVersion = process.env.UBIK_ECMA||'latest',
+  index = 0,
+  total = 0,
 }) {
   file = resolve(cwd, file)
   let modified = false
@@ -344,10 +318,10 @@ export function patchDTSImport ({
     const isNotPatched = !oldValue.endsWith(distDtsExt)
     if (isRelative && isNotPatched) {
       if (!modified) {
-        console.br().log('Patching', bold(file))
+        console.log(`(${index}/${total})`, 'Patching', bold(file))
       }
       const newValue = `${oldValue}.dist`
-      console.log(' ', oldValue, '->', newValue)
+      console.debug(' ', oldValue, '->', newValue)
       Object.assign(declaration.source, { value: newValue, raw: JSON.stringify(newValue) })
       modified = true
     }
@@ -362,22 +336,6 @@ export function patchDTSImport ({
   return patched
 }
 
-export function patchCJSRequires ({
-  cwd         = process.cwd(),
-  files       = [],
-  verbose     = process.env.UBIK_VERBOSE,
-  dryRun      = true,
-  ecmaVersion = process.env.UBIK_ECMA||'latest'
-}) {
-  files = files.filter(x=>x.endsWith(distCjsExt))
-  console.log(`Patching requires in ${files.length} CJS files...`)
-  let patched = {}
-  for (const file of files) {
-    patched = patchCJSRequire({ patched, cwd, dryRun, file })
-  }
-  return patched
-}
-
 export function patchCJSRequire ({
   patched     = {},
   cwd         = process.cwd(),
@@ -385,7 +343,9 @@ export function patchCJSRequire ({
   file        = required('file'),
   source      = readFileSync(resolve(cwd, file), 'utf8'),
   ecmaVersion = process.env.UBIK_ECMA||'latest',
-  ast         = acornParse(file, source)
+  ast         = acornParse(file, source),
+  index = 0,
+  total = 0,
 }) {
   file = resolve(cwd, file)
   let modified = false
@@ -406,10 +366,10 @@ export function patchCJSRequire ({
             const target = `${resolve(dirname(file), value)}.ts`
             if (existsSync(target)) {
               if (!modified) {
-                console.br().log('Patching', bold(file))
+                console.log(`(${index}/${total})`, 'Patching', bold(file))
               }
               const newValue = `${value}${distCjsExt}`
-              console.log(`  require("${value}") -> require("${newValue}")`)
+              console.debug(`  require("${value}") -> require("${newValue}")`)
               args[0].value = newValue
               args[0].raw = JSON.stringify(newValue)
               modified = true
@@ -437,4 +397,21 @@ export function patchCJSRequire ({
     }
   }
   return patched
+}
+
+function acornParse (name, source) {
+  const ecmaVersion = process.env.UBIK_ECMA||'latest'
+  try {
+    return acorn.parse(source, {
+      sourceType: 'module',
+      locations: true,
+      //@ts-ignore
+      ecmaVersion
+    })
+  } catch (e) {
+    console.br()
+      .error('Failed to parse', bold(name))
+      .error(bold(e.message), 'at', e.loc.line, ':', e.loc.column)
+      .error(`Source:\n${source}`)
+  }
 }
