@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 import process from 'node:process'
 import fetch from 'node-fetch'
 import {UbikError, console, bold, required, Package} from '../tool/tool.mjs'
-import {prepareTypeScript, revertModifications} from './task-compile.mjs'
+import * as Compile from './task-compile.mjs'
 
 export function printPublishUsage () {
   console.info(
@@ -70,11 +70,11 @@ export async function release (cwd, {
   /** Determine if this is a TypeScript package that needs to be compiled and patched. */
   isTypeScript ||= (pkgJson.main||'').endsWith('.ts')
   let distFiles = new Set()
+  if (isTypeScript) {
+    /** Do the TypeScript magic if necessary. */
+    distFiles = await Compile.prepareTypeScript({ cwd, dryRun, pkgJson, args, keep })
+  }
   try {
-    /** Do the TypeScript magic if it's necessary. */
-    if (isTypeScript) {
-      distFiles = await prepareTypeScript({ cwd, dryRun, pkgJson, args, keep })
-    }
     /** If this is not a dry run, publish to NPM */
     if (!dryRun) {
       performRelease({ cwd, npm, args })
@@ -86,10 +86,10 @@ export async function release (cwd, {
     }
   } catch (e) {
     /** Restore everything to a (near-)pristine state. */
-    revertModifications({ cwd, keep, distFiles })
+    Compile.revertModifications({ cwd, keep, distFiles })
     throw e
   }
-  revertModifications({ cwd, keep, distFiles })
+  Compile.revertModifications({ cwd, keep, distFiles })
   process.chdir(previousCwd)
   return pkgJson
 }

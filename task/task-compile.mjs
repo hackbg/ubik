@@ -47,6 +47,7 @@ export async function prepareTypeScript ({
 } = {}) {
   pkgJson.ubik = true
   await compileTypeScript({ cwd, dtsOut, esmOut, cjsOut })
+  await runConcurrently({ cwd, commands: [ 'ls -al' ] })
   let distFiles = new Set()
   try {
     distFiles = await flattenFiles({ cwd, pkgJson, dtsOut, esmOut, cjsOut })
@@ -98,15 +99,21 @@ export function revertModifications ({
     .log('Reverting modifications...')
 
   if (!existsSync(join(cwd, 'package.json.bak'))) {
-    console.warn("Backup file package.json.bak not found")
+    console
+      .br()
+      .warn("Backup file package.json.bak not found")
   } else {
-    console.log("Restoring original package.json")
+    console
+      .br()
+      .log("Restoring original package.json")
     unlinkSync(join(cwd, 'package.json'))
     copyFileSync(join(cwd, 'package.json.bak'), join(cwd, 'package.json'))
     unlinkSync(join(cwd, 'package.json.bak'))
   }
 
-  console.log('Deleting generated files...')
+  console
+    .br()
+    .log('Deleting generated files...')
   ;[dtsOut, esmOut, cjsOut].map(out=>rimraf.sync(out))
   for (const file of distFiles) {
     unlinkSync(file)
@@ -187,7 +194,9 @@ export async function flattenFiles ({
 
   pkgJson.files = [...new Set([...pkgJson.files||[], ...files])].sort()
 
-  console.br().log('Removing dist directories...')
+  console.br().log('Files:', pkgJson.files)
+
+  console.br().debug('Removing dist directories...')
   ;[dtsOut, esmOut, cjsOut].map(out=>rimraf.sync(out))
 
   return distFiles
