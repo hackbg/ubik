@@ -16,7 +16,9 @@ import * as astring from 'astring'
 import fastGlob from 'fast-glob'
 
 import { recastTS } from '../shims.cjs'
-import { required, console, bold, Package, runConcurrently } from '../tool/tool.mjs'
+import { required, Console, bold, Package, runConcurrently } from '../tool/tool.mjs'
+
+const console = new Console('@hackbg/ubik (compile)')
 
 if (process.env.UBIK_VERBOSE) console.warn(`Remembering the Node16/TS4 ESM crisis of April 2022...`)
 
@@ -60,6 +62,7 @@ export async function prepareTypeScript ({
       writeFileSync(join(cwd, 'package.json'), JSON.stringify(pkgJson, null, 2), 'utf8')
     }
   } catch (e) {
+    console.br().error('prepareTypeScript failed:', e.message)
     revertModifications({ cwd, keep: false, distFiles })
     throw e
   }
@@ -78,6 +81,7 @@ export function revertModifications ({
 
   if (keep) {
     console
+      .br()
       .warn("Not restoring original 'package.json'; keeping build artifacts.")
       .warn(
         "Your package is now in a *modified* state: make sure you don't commit it by accident!"
@@ -89,7 +93,9 @@ export function revertModifications ({
     return true
   }
 
-  console.log('Reverting modifications...')
+  console
+    .br()
+    .log('Reverting modifications...')
 
   if (!existsSync(join(cwd, 'package.json.bak'))) {
     console.warn("Backup file package.json.bak not found")
@@ -144,7 +150,7 @@ export async function flattenFiles ({
   const distFiles = new Set()
 
   // Collect output in package root and add it to "files" in package.json:
-  console.log('Flattening package...')
+  console.br().log('Flattening package...')
   const files = [
 
     ...await collectFiles({
@@ -181,7 +187,7 @@ export async function flattenFiles ({
 
   pkgJson.files = [...new Set([...pkgJson.files||[], ...files])].sort()
 
-  console.log('Removing dist directories...')
+  console.br().log('Removing dist directories...')
   ;[dtsOut, esmOut, cjsOut].map(out=>rimraf.sync(out))
 
   return distFiles
@@ -196,7 +202,8 @@ export async function collectFiles ({
   ext2      = required('ext2')    || '',
   distFiles = new Set(),
 } = {}) {
-  const { log } = console.sub(`(collecting ${name})`)
+  console.br()
+  const { debug: log } = console.sub(`collecting ${name}:`)
   log(`Collecting from`, bold(`${distDir}/**/*${ext1}`), 'into', bold(`./**/*${ext2}"`))
   const inputs = await fastGlob([
     '!node_modules',

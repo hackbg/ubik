@@ -2,9 +2,11 @@
   * You should have received a copy of the GNU Affero General Public License
   * along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 import { UbikError } from './tool-error.mjs'
-import { bold } from './tool-log.mjs'
+import { Console, bold } from './tool-log.mjs'
 import { promisify } from 'node:util'
 import { exec } from 'node:child_process'
+
+const console = new Console('@hackbg/ubik (run)')
 
 const execPromise = promisify(exec)
 
@@ -13,7 +15,7 @@ export async function runConcurrently ({
   commands = [],
   verbose  = Boolean(process.env.UBIK_VERBOSE)
 }) {
-  console.log(`Running ${bold(commands.length)} commands in ${bold(cwd)}:`)
+  console.br().log(`Running ${bold(commands.length)} commands in ${bold(cwd)}:`)
   commands.forEach(command=>console.log(' ', command))
   let result
   try {
