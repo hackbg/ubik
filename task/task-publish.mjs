@@ -110,13 +110,25 @@ export function tagRelease ({
   noPush = Boolean(process.env.UBIK_NO_PUSH),
   git    = 'git'
 } = {}) {
-  console.log('Published:', tag)
+
+  console
+    .br()
+    .log('Published:', tag)
+
   // Add Git tag
-  if (noTag) return
+  if (noTag) {
+    return {}
+  }
+
   execSync(`${git} tag -f "${tag}"`, { cwd, stdio: 'inherit' })
-  if (noPush) return
+
+  if (noPush) {
+    return { tag }
+  }
+
   execSync(`${git} push --tags`, { cwd, stdio: 'inherit' })
-  return true
+
+  return { tag, pushed: true }
 }
 
 // Bail if Git tag already exists
