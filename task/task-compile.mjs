@@ -49,23 +49,39 @@ export async function prepareTypeScript ({
   await compileTypeScript({ cwd, dtsOut, esmOut, cjsOut })
   await runConcurrently({ cwd, commands: [ 'ls -al' ] })
   let distFiles = new Set()
-  try {
-    distFiles = await flattenFiles({ cwd, pkgJson, dtsOut, esmOut, cjsOut })
-    await Package.patchPackageJson({ cwd, pkgJson, distDtsExt, distEsmExt, distCjsExt })
-    await patchESMImports({ dryRun, files: pkgJson.files })
-    await patchDTSImports({ dryRun, files: pkgJson.files })
-    await patchCJSRequires({ cwd, dryRun, files: pkgJson.files })
-    if (dryRun) {
-      console.info(`Published package.json would be:\n${JSON.stringify(pkgJson, null, 2)}`)
-    } else {
-      console.log("Backing up package.json to package.json.bak")
-      copyFileSync(join(cwd, 'package.json'), join(cwd, 'package.json.bak'))
-      writeFileSync(join(cwd, 'package.json'), JSON.stringify(pkgJson, null, 2), 'utf8')
-    }
-  } catch (e) {
-    console.br().error('prepareTypeScript failed:', e.message)
+  const onError = source => e => {
+    console.br().error(`${bold(source)} failed:`, bold(e.message))
     revertModifications({ cwd, keep: false, distFiles })
     throw e
+  }
+  distFiles = await flattenFiles({ cwd, pkgJson, dtsOut, esmOut, cjsOut })
+    .catch(onError('flattenFiles'))
+  try {
+    Package.patchPackageJson({ cwd, pkgJson, distDtsExt, distEsmExt, distCjsExt })
+  } catch (e) {
+    onError('patchPackageJson')(e)
+  }
+  try {
+    patchESMImports({ dryRun, files: pkgJson.files })
+  } catch (e) {
+    onError('patchESMImports')(e)
+  }
+  try {
+    patchDTSImports({ dryRun, files: pkgJson.files })
+  } catch (e) {
+    onError('patchDTSImports')(e)
+  }
+  try {
+    patchCJSRequires({ cwd, dryRun, files: pkgJson.files })
+  } catch (e) {
+    onError('patchCJSRequires')(e)
+  }
+  if (dryRun) {
+    console.info(`Published package.json would be:\n${JSON.stringify(pkgJson, null, 2)}`)
+  } else {
+    console.log("Backing up package.json to package.json.bak")
+    copyFileSync(join(cwd, 'package.json'), join(cwd, 'package.json.bak'))
+    writeFileSync(join(cwd, 'package.json'), JSON.stringify(pkgJson, null, 2), 'utf8')
   }
   return distFiles
 }
@@ -158,45 +174,32 @@ export async function flattenFiles ({
 
   // Collect output in package root and add it to "files" in package.json:
   console.br().log('Flattening package...')
-  const files = [
+  await collectFiles({
+    cwd, distFiles, name: 'ESM',
+    srcDir: dirname(pkgJson.main), distDir: esmOut,
+    ext1: '.js', ext2: distEsmExt,
+  })
+  await collectFiles({
+    cwd, distFiles, name: 'CJS',
+    srcDir: dirname(pkgJson.main), distDir: cjsOut,
+    ext1: '.js', ext2: distCjsExt,
+  })
+  await collectFiles({
+    cwd, distFiles, name: 'DTS',
+    srcDir: dirname(pkgJson.main), distDir: dtsOut,
+    ext1: '.d.ts', ext2: distDtsExt,
+  })
 
-    ...await collectFiles({
-      cwd,
-      distFiles,
-      name: 'ESM',
-      srcDir: dirname(pkgJson.main),
-      distDir: esmOut,
-      ext1: '.js',
-      ext2: distEsmExt,
-    }),
+  pkgJson.files = [...new Set([...pkgJson.files||[], ...distFiles])].sort()
 
-    ...await collectFiles({
-      cwd,
-      distFiles,
-      name: 'CJS',
-      srcDir: dirname(pkgJson.main),
-      distDir: cjsOut,
-      ext1: '.js',
-      ext2: distCjsExt,
-    }),
+  console
+    .br()
+    .log(`Collected files:\n  ${pkgJson.files.join('\n  ')}`)
 
-    ...await collectFiles({
-      cwd,
-      distFiles,
-      name: 'DTS',
-      srcDir: dirname(pkgJson.main),
-      distDir: dtsOut,
-      ext1: '.d.ts',
-      ext2: distDtsExt,
-    }),
+  console
+    .br()
+    .debug('Removing dist directories...')
 
-  ]
-
-  pkgJson.files = [...new Set([...pkgJson.files||[], ...files])].sort()
-
-  console.br().log('Files:', pkgJson.files)
-
-  console.br().debug('Removing dist directories...')
   ;[dtsOut, esmOut, cjsOut].map(out=>rimraf.sync(out))
 
   return distFiles
@@ -221,10 +224,11 @@ export async function collectFiles ({
     `${distDir}/**/*${ext1}`
   ])
   const outputs = []
-  for (const file of inputs) {
-    if (!file.endsWith(ext1)) continue
+  for (const file of inputs.filter(file=>file.endsWith(ext1))) {
     const srcFile = join(cwd, file)
-    const newFile = Package.replaceExtension(join(srcDir, relative(distDir, file)), ext1, ext2)
+    const newFile = Package.replaceExtension(
+      join(srcDir, relative(distDir, file)), ext1, ext2
+    )
     mkdirpSync(dirname(newFile))
     log(`  ${Package.toRel(cwd, srcFile)} -> ${Package.toRel(cwd, newFile)}`)
     copyFileSync(srcFile, newFile)
@@ -247,9 +251,27 @@ export function patchESMImports ({
   console.br().log(`Patching imports in ${files.length} ESM files...`)
   let patched = {}
   for (const file of files) {
+    console.log('Patching', bold(file))
     patched = patchESMImport({ patched, cwd, dryRun, file, ecmaVersion })
   }
   return patched
+}
+
+function acornParse (name, source) {
+  const ecmaVersion = process.env.UBIK_ECMA||'latest'
+  try {
+    return acorn.parse(source, {
+      sourceType: 'module',
+      locations: true,
+      //@ts-ignore
+      ecmaVersion
+    })
+  } catch (e) {
+    console.br()
+      .error('Failed to parse', bold(name))
+      .error(bold(e.message), 'at', e.loc.line, ':', e.loc.column)
+      .error(`Source:\n${source}`)
+  }
 }
 
 export function patchESMImport ({
@@ -259,11 +281,7 @@ export function patchESMImport ({
   file        = required('file'),
   source      = readFileSync(resolve(cwd, file), 'utf8'),
   ecmaVersion = process.env.UBIK_ECMA||'latest',
-  ast         = acorn.parse(source, {
-    sourceType: 'module',
-    //@ts-ignore
-    ecmaVersion
-  })
+  ast         = acornParse(file, source)
 }) {
   file = resolve(cwd, file)
   let modified = false
@@ -367,12 +385,7 @@ export function patchCJSRequire ({
   file        = required('file'),
   source      = readFileSync(resolve(cwd, file), 'utf8'),
   ecmaVersion = process.env.UBIK_ECMA||'latest',
-  ast         = acorn.parse(source, {
-    sourceType: 'module',
-    locations: true,
-    //@ts-ignore
-    ecmaVersion
-  })
+  ast         = acornParse(file, source)
 }) {
   file = resolve(cwd, file)
   let modified = false
