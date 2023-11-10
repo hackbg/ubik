@@ -78,7 +78,7 @@ export async function release (cwd, {
     /** If this is not a dry run, publish to NPM */
     if (!dryRun) {
       performRelease({ cwd, npm, args })
-      if (tag) {
+      if (!args.includes('--dry-run') && tag) {
         tagRelease({ cwd, tag, git })
       }
     } else {
