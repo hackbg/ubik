@@ -9,6 +9,17 @@ import { required } from './tool/tool-error.mjs'
 import { throws } from 'node:assert'
 throws(required)
 
+import { printUsage, printHelp } from './task/task.mjs'
+const mute = { info: () => mute }
+printUsage(
+  //@ts-ignore
+  mute
+)
+printHelp(
+  //@ts-ignore
+  mute
+)
+
 await import('./tool/tool-package.test.mjs')
 await import('./tool/tool-run.test.mjs')
 await import('./task/task-merge.test.mjs')

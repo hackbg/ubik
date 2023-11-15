@@ -15,11 +15,17 @@ export async function generateImportMap ({
   importMap    = { imports: {}, scopes: {} },
   patchMain    = x => {},
   patchExports = x => {},
-  patchImports = x => {}
+  patchImports = x => {},
+  write        = true
 } = {}) {
 
+  console.log({manifest})
+
   await addToImportMap(0, manifest.name, manifest.version, manifest.dependencies, importMap.imports)
-  writeFileSync(output, JSON.stringify(importMap, null, 2))
+
+  if (write) {
+    writeFileSync(output, JSON.stringify(importMap, null, 2))
+  }
 
   async function addToImportMap (depth, name, version, deps, scope) {
     deps = Object.entries(deps)
@@ -84,25 +90,24 @@ export async function generateImportMap ({
   } = {}) {
     const { exports = {} } = manifest
     const selfRefs = importMap.scopes[`/${relpath}/`] ??= {}
-    if (Object.keys(exports).length > 0) {
-      for (const [specifier, entry] of Object.entries(exports)) {
-        let target = undefined
-          ||entry['import']
-          ||entry['default']
-          ||((typeof entry === 'string')?entry:undefined)
-        if (typeof target === 'object') {
-          target = target['default']
-        }
-        if (target) {
-          console.log(indent(depth), `  export:`, bold(specifier), '->', bold(target))
-          scope[join(name, specifier)] = `./${join(relpath, target)}`
-          selfRefs[join(name, specifier)] = `./${join(relpath, target)}`
-        } else {
-          console.warn(indent(depth), `  export:`, bold(specifier), ' - unresolved!', JSON.stringify(entry))
-        }
-        // Extensibility hook
-        await patchExports({ importMap, depth, scope, name, relpath, manifest, specifier, entry })
+    console.log(depth, name, exports)
+    for (const [specifier, entry] of Object.entries(exports)) {
+      let target = undefined
+        ||entry['import']
+        ||entry['default']
+        ||((typeof entry === 'string')?entry:undefined)
+      while (typeof target === 'object') {
+        target = target['default']
       }
+      if (target) {
+        console.debug(indent(depth), `  export:`, bold(specifier), '->', bold(target))
+        scope[join(name, specifier)] = `./${join(relpath, target)}`
+        selfRefs[join(name, specifier)] = `./${join(relpath, target)}`
+      } else {
+        console.warn(indent(depth), `  export:`, bold(specifier), ' - unresolved!', JSON.stringify(entry))
+      }
+      // Extensibility hook
+      await patchExports({ importMap, depth, scope, name, relpath, manifest, specifier, entry })
     }
     return { selfRefs }
   }
