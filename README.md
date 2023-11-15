@@ -27,7 +27,7 @@ Add to `package.json`:
 }
 ```
 
-Now you can publish your library with `npm run ubik publish`.
+Now you can publish your library with `npm run ubik release`.
 
 ## Tasks
 
@@ -39,7 +39,7 @@ The recommended way to fix this with Ubik is by using the following command
 instead of `npm publish` to publish your package to NPM:
 
 ```sh
-npm run ubik publish
+npm run ubik release
 ```
 
 You can also do this to apply the fix in place:
