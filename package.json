@@ -1,6 +1,6 @@
 {
   "name": "@hackbg/ubik",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "type": "module",
   "main": "unbik.mjs",
   "homepage": "https://github.com/hackbg/ubik",
@@ -22,11 +22,10 @@
     "shims.cjs"
   ],
   "scripts": {
-    "ubik":    "./ubik.cli.mjs",
-    "test":    "time ./ubik.test.mjs",
-    "cov":     "time c8 -x .fixtures -x '**/*.test.mjs' -r text -r html ./ubik.test.mjs",
+    "release": "./ubik.cli.mjs release --access public --otp 123123",
     "check":   "tsc --noEmit",
-    "release": "pnpm publish --access public --otp 123123"
+    "test":    "time ./ubik.test.mjs",
+    "cov":     "time c8 -x .fixtures -x '**/*.test.mjs' -r text -r html ./ubik.test.mjs"
   },
   "dependencies": {
     "@hackbg/logs": "^2.0.8",
