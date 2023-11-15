@@ -1,8 +1,8 @@
 {
   "name": "@hackbg/ubik",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "type": "module",
-  "main": "unbik.mjs",
+  "main": "ubik.mjs",
   "homepage": "https://github.com/hackbg/ubik",
   "repository": "hackbg/ubik",
   "bin": {

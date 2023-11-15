@@ -1,15 +1,19 @@
+<div align="center">
+
 # @hackbg/ubik
 
 ![](./ubik.svg)
 
-***Ubik***, named after the mysterious "reality-restoring substance" from
-[Philip K. Dick's eponymous novel](https://en.wikipedia.org/wiki/Ubik),
-helps you restore compatibility, interoperability, and correctness when
-building libraries in TypeScript.
+```
+“The door refused to open. It said, "Five cents, please.”
+― Philip K. Dick, Ubik
+```
+
+</div>
 
 What it does:
 
-* Add missing extensions to TypeScript output.
+* Add missing extensions to TypeScript ESM output (required by Node 16+ and hamstrung by TS)
 * Add missing `/index.js` to directory imports.
 * Separate undifferentiated `import`/`import type` within a package.
 * Merge packages that were prematurely separated but ended up tightly coupled.
@@ -40,17 +44,6 @@ npm run release
 pnpm release
 ```
 
-If you're publishing a package that requires NPM 2FA,
-there's a bug where NPM may not show the OTP prompt
-until given an invalid OTP; if you encounter it, you
-may want to use this command instead:
-
-```json
-  "scripts": {
-    "release": "ubik release --access public --otp 000000"
-   }
-```
-
 ## Tasks
 
 ### More about fixing extensions
@@ -64,7 +57,7 @@ npm run ubik compile
 Note that this will modify your `package.json` and leave the original at `package.json.bak`.
 Same applies for errors during publishing.
 
-For best experience, add to `tsconfig.json`:
+Recommended `tsconfig.json`:
 
 ```json
 {
@@ -79,7 +72,7 @@ For best experience, add to `tsconfig.json`:
 }
 ```
 
-Add to `.gitignore`:
+Recommended `.gitignore`:
 
 ```
 package.json.bak
@@ -88,6 +81,17 @@ dist/
 *.dist.mjs
 *.dist.cjs
 *.dist.d.ts
+```
+
+If you're publishing a package that requires NPM 2FA,
+there's a bug where NPM may not show the OTP prompt
+until given an invalid OTP; if you encounter it, you
+may want to use this command instead:
+
+```json
+  "scripts": {
+    "release": "ubik release --access public --otp 000000"
+   }
 ```
 
 **KNOWN ISSUE:** This operation assumes that the entrypoint of your package (`main` in `package.json`)
