@@ -24,13 +24,7 @@ for (const cwd of [
 
   assert(Compile.revertModifications({ cwd, keep: true, }))
 
-  for (const patch of [
-    Compile.patchESMImports,
-    Compile.patchDTSImports,
-    Compile.patchCJSRequires,
-  ]) {
-    assert(patch({ files: [] }))
-  }
+  Compile.patchAll('', ()=>{}, {})
 
   assert.deepEqual(Compile.patchESMImport({
     cwd, dryRun: true, file: 'name', source: `import foo from './lib'`,
