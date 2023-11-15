@@ -80,7 +80,7 @@ export function separateNamespaceImport ({
         const before = recast.print(path.value).code
         path.value.typeName.left.name = `_${name}`
         const after = recast.print(path.value).code
-        console.log('Updating type annotation:', bold(before), '->', bold(after))
+        console.debug('Updating type annotation:', bold(before), '->', bold(after))
       }
       this.traverse(path)
     }

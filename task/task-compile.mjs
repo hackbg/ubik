@@ -77,7 +77,7 @@ export async function prepareTypeScript ({
     onError('patchCJSRequires')(e)
   }
   if (dryRun) {
-    console.info(`Published package.json would be:\n${JSON.stringify(pkgJson, null, 2)}`)
+    console.br().info(`Published package.json would be:\n${JSON.stringify(pkgJson, null, 2)}`)
   } else {
     console.log("Backing up package.json to package.json.bak")
     copyFileSync(join(cwd, 'package.json'), join(cwd, 'package.json.bak'))
@@ -280,7 +280,7 @@ export function patchESMImport ({
     const isNotPatched = !oldValue.endsWith(distEsmExt)
     if (isRelative && isNotPatched) {
       if (!modified) {
-        console.log(`(${index}/${total})`, 'Patching', bold(file))
+        console.log(`(${index}/${total})`, 'Patching', bold(relative(cwd, file)))
       }
       const newValue = `${oldValue}${distEsmExt}`
       console.debug(' ', oldValue, '->', newValue)
@@ -318,7 +318,7 @@ export function patchDTSImport ({
     const isNotPatched = !oldValue.endsWith(distDtsExt)
     if (isRelative && isNotPatched) {
       if (!modified) {
-        console.log(`(${index}/${total})`, 'Patching', bold(file))
+        console.log(`(${index}/${total})`, 'Patching', bold(relative(cwd, file)))
       }
       const newValue = `${oldValue}.dist`
       console.debug(' ', oldValue, '->', newValue)
@@ -366,7 +366,7 @@ export function patchCJSRequire ({
             const target = `${resolve(dirname(file), value)}.ts`
             if (existsSync(target)) {
               if (!modified) {
-                console.log(`(${index}/${total})`, 'Patching', bold(file))
+                console.log(`(${index}/${total})`, 'Patching', bold(relative(cwd, file)))
               }
               const newValue = `${value}${distCjsExt}`
               console.debug(`  require("${value}") -> require("${newValue}")`)

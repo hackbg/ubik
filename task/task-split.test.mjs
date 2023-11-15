@@ -148,5 +148,5 @@ equal(file.save(true), `
 
 const case1 = new Resolver('.fixtures/case1')
 case1.load(['.'])
-console.log(case1.patch().save(true))
+case1.patch().save(true)
 

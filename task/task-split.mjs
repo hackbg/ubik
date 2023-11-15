@@ -1,6 +1,7 @@
 /** This is file is part of "Ubik", (c) 2023 Hack.bg, available under GNU AGPL v3.
   * You should have received a copy of the GNU Affero General Public License
   * along with this program.  If not, see <http://www.gnu.org/licenses/>. */
+import { relative } from 'node:path'
 import { getDefault } from '../tool/tool-parse.mjs'
 import { Console, bold } from '@hackbg/logs'
 const console = new Console('@hackbg/ubik (split)')
@@ -23,7 +24,7 @@ export function separateTypeImports ({
   // For every `import` declaration in current module:
   for (const [target, specifiers] of imports.entries()) {
     console.log(``)
-    console.log(`into ${bold(path)} from ${bold(target)}:`)
+    console.log(`into ${bold(relative(resolver.root, path))} from ${bold(target)}:`)
     updateImportExport(
       'importing from', resolver, path, target, specifiers, newImports, newImportTypes
     )
@@ -32,7 +33,7 @@ export function separateTypeImports ({
   // For every `export from` declaration in current module:
   for (const [target, specifiers] of reexports.entries()) {
     console.log(``)
-    console.log(`thru ${bold(path)} from ${bold(target)}:`)
+    console.log(`thru ${relative(resolver.root, path)} from ${bold(target)}:`)
     updateImportExport(
       'exporting thru', resolver, path, target, specifiers, newReexports, newReexportTypes
     )
@@ -50,7 +51,13 @@ export function separateTypeImports ({
 
 /** Update import/reexport mapping data */
 function updateImportExport (
-  mode, resolver, path, target, specifiers, newValues, newTypes,
+  mode,
+  resolver,
+  path,
+  target,
+  specifiers,
+  newValues,
+  newTypes,
 ) {
   const resolved = resolveTarget(resolver, path, target)
   if (!resolved) return

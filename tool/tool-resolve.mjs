@@ -45,7 +45,7 @@ export class Resolver extends Map {
         continue
       }
       path = join(this.root, path)
-      console.debug('load:', bold(path))
+      console.debug('load:', bold(relative(this.root, path)))
       const stat = statSync(path)
       const relpath = relative(this.root, resolve(path))
       if (stat.isDirectory()) {

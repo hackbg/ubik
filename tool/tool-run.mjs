@@ -5,6 +5,7 @@ import { UbikError } from './tool-error.mjs'
 import { Console, bold } from './tool-log.mjs'
 import { promisify } from 'node:util'
 import { exec } from 'node:child_process'
+import { relative } from 'node:path'
 
 const console = new Console('@hackbg/ubik (run)')
 
@@ -15,7 +16,7 @@ export async function runConcurrently ({
   commands = [],
   verbose  = Boolean(process.env.UBIK_VERBOSE)
 }) {
-  console.br().log(`Running ${bold(commands.length)} commands in ${bold(cwd)}:`)
+  console.br().log(`Running ${bold(commands.length)} commands in ${bold(relative(process.cwd(), cwd))}:`)
   commands.forEach(command=>console.log(' ', command))
   let result
   try {

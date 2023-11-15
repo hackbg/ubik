@@ -5,6 +5,7 @@ import assert from 'node:assert'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
 import * as Compile from './task-compile.mjs'
+
 for (const cwd of [
   join(dirname(fileURLToPath(import.meta.url)), '../.fixtures', 'publish-esm'),
   join(dirname(fileURLToPath(import.meta.url)), '../.fixtures', 'publish-cjs'),
