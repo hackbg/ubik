@@ -1,8 +1,8 @@
 {
   "name": "@hackbg/ubik",
-  "version": "2.0.0-rc.1",
+  "version": "2.0.0-rc.3",
   "type": "module",
-  "main": "index.mjs",
+  "main": "unbik.mjs",
   "homepage": "https://github.com/hackbg/ubik",
   "repository": "hackbg/ubik",
   "bin": {
@@ -12,24 +12,26 @@
   "license": "AGPL-3.0-only",
   "files": [
     "README.md",
-    "src/*",
-    "ubik.cli.mjs"
+    "docs/*",
+    "task/*",
+    "!task/*.test.*",
+    "tool/*",
+    "!tool/*.test.*",
+    "ubik.mjs",
+    "ubik.cli.mjs",
+    "shims.cjs"
   ],
   "scripts": {
-    "ubik": "./ubik.cli.mjs",
-    "test": "time c8 ./test/index.mjs",
-    "test:split": "time c8 node ./test/split-imports.mjs",
-    "test:merge": "time c8 node ./test/merge-packages.mjs",
-    "test:publish": "time c8 node ./test/publish-package.mjs",
-    "test:stars": "time c8 node ./test/split-stars.mjs",
-    "cov:publish": "time c8 -r html node ./test/publish-package.mjs",
-    "cov": "time c8 -r text -r html ./test/index.mjs",
-    "check": "tsc --noEmit",
+    "ubik":    "./ubik.cli.mjs",
+    "test":    "time ./ubik.test.mjs",
+    "cov":     "time c8 -x .fixtures -x '**/*.test.mjs' -r text -r html ./ubik.test.mjs",
+    "check":   "tsc --noEmit",
     "release": "pnpm publish --access public --otp 123123"
   },
   "dependencies": {
+    "@hackbg/logs": "^2.0.8",
+
     "@babel/parser": "^7.22.10",
-    "@hackbg/logs": "^2",
     "acorn": "^8.10.0",
     "acorn-walk": "^8.2.0",
     "astring": "^1.8.6",
