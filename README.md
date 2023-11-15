@@ -17,32 +17,45 @@ What it does:
 
 ## Quick start
 
-Add to `package.json`:
+`tsc` outputs invalid JavaScript when building ESM libraries. [Read more](./docs/extensions.md)
+
+To fix this with Ubik, the easiest way is to let it publish your packages:
 
 ```json
 {
   "devDependencies": {
     "@hackbg/ubik": "^2"
+  },
+  "scripts": {
+    "release": "ubik release --access public"
   }
 }
 ```
 
-Now you can publish your library with `npm run ubik release`.
+Now you can publish your library with:
+
+```bash
+npm run release
+# what we do is:
+pnpm release
+```
+
+If you're publishing a package that requires NPM 2FA,
+there's a bug where NPM may not show the OTP prompt
+until given an invalid OTP; if you encounter it, you
+may want to use this command instead:
+
+```json
+  "scripts": {
+    "release": "ubik release --access public --otp 000000"
+   }
+```
 
 ## Tasks
 
-### Fixing extensions
+### More about fixing extensions
 
-`tsc` outputs invalid JavaScript when building ESM libraries. [Read more](./docs/extensions.md)
-
-The recommended way to fix this with Ubik is by using the following command
-instead of `npm publish` to publish your package to NPM:
-
-```sh
-npm run ubik release
-```
-
-You can also do this to apply the fix in place:
+You can also apply the fix in place:
 
 ```sh
 npm run ubik compile
