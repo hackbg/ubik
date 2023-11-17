@@ -1,6 +1,6 @@
 {
   "name": "@hackbg/ubik",
-  "version": "2.0.4",
+  "version": "2.0.5",
   "type": "module",
   "main": "ubik.mjs",
   "homepage": "https://github.com/hackbg/ubik",
@@ -19,7 +19,8 @@
     "!tool/*.test.*",
     "ubik.mjs",
     "ubik.cli.mjs",
-    "shims.cjs"
+    "shims.cjs",
+    "package.mjs"
   ],
   "scripts": {
     "release": "./ubik.cli.mjs release --access public --otp 123123",
