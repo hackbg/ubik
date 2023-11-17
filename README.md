@@ -12,7 +12,14 @@
 ---
 
 Made with **#%&!** @ [**Hack.bg**](https://foss.hack.bg)
-in response to the Node16/TS4 incompatibility event of Q2 2022.
+in response to the Node16/TS4 incompatibility event of Q2 2022
+
+Growing since then, to encompass other codemods you might've
+found yourself wishing you could do
+
+Increases you enjoyment of TypeScript, ESM, import maps,
+packages, namespaces, star imports, and life in general -
+or your money back
 
 ---
 
