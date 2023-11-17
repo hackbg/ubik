@@ -4,44 +4,39 @@
 
 ![](./ubik.svg)
 
+---
+
+Made with **#%&!** @ [**Hack.bg**](https://foss.hack.bg)
+in response to the Node16/TS4 incompatibility event of Q2 2022,
+and growing since then to encompass other codemods that
+are guaranteed to increase your enjoyment of TypeScript,
+ESM, import maps, packages, namespaces, star imports,
+and life in general - or your money back!
+
+---
+
 ```
 “The door refused to open. It said, "Five cents, please.”
 ― Philip K. Dick, Ubik
 ```
 
----
-
-Made with **#%&!** @ [**Hack.bg**](https://foss.hack.bg)
-in response to the Node16/TS4 incompatibility event of Q2 2022
-
-Growing since then, to encompass other codemods you might've
-found yourself wishing you could do
-
-Increases you enjoyment of TypeScript, ESM, import maps,
-packages, namespaces, star imports, and life in general -
-or your money back
-
----
-
 </div>
-
-What it does:
-
-* Add missing extensions to TypeScript ESM output (required by Node 16+ and hamstrung by TS)
-* Add missing `/index.js` to directory imports.
-* Separate undifferentiated `import`/`import type` within a package.
-* Merge packages that were prematurely separated but ended up tightly coupled.
-* Publish patched packages then restore your working tree to a pristine state.
 
 ## Quick start
 
 `tsc` outputs invalid JavaScript when building ESM libraries. [Read more](./docs/extensions.md)
 
-To fix this with Ubik, the easiest way is to let it publish your packages:
+* Node 16+ requires extensions in ESM `import`
+* TypeScript does something weird and hamstrung
+* Then people told them and they made it worse
+
+The easiest way to use valid ESM is to let it publish your TypeScript package to NPM:
 
 ```json
 {
+  "main": "index.ts",
   "devDependencies": {
+    "typescript": "latest",
     "@hackbg/ubik": "^2"
   },
   "scripts": {
@@ -99,13 +94,9 @@ dist/
 
 ## Other tasks
 
-### Fixing type imports
+What it does:
 
-```sh
-// TODO
-```
-
-### Fixing star imports
+### Fix star imports
 
 When targeting ESM on Node, CommonJS imports are wrapped in an extra `default` key,
 of which TypeScript is unaware. [Read more](./docs/split-stars.md)
@@ -116,9 +107,17 @@ Let's rewrite the imports so that both work:
 npm exec ubik split-stars ./src -- protobufjs
 ```
 
-### Others
+### Add missing `/index.js` to directory imports.
 
-[todooooo...](https://youtu.be/VyZiIuMufTA?si=Owhmey5gRLN-AaaK&t=11)
+[todo: document](https://youtu.be/VyZiIuMufTA?si=Owhmey5gRLN-AaaK&t=11)
+
+### Separate undifferentiated `import`/`import type`
+
+[todo: document](https://youtu.be/VyZiIuMufTA?si=Owhmey5gRLN-AaaK&t=11)
+
+### Merge packages
+
+[todo: document](https://youtu.be/VyZiIuMufTA?si=Owhmey5gRLN-AaaK&t=11)
 
 ## Also goes well with...
 
