@@ -1,6 +1,6 @@
 {
   "name": "@hackbg/ubik",
-  "version": "2.0.7",
+  "version": "2.0.8",
   "type": "module",
   "main": "ubik.mjs",
   "homepage": "https://github.com/hackbg/ubik",
