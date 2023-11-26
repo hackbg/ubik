@@ -8,8 +8,6 @@ import { promisify } from 'node:util'
 import { exec, execSync, execFileSync } from 'node:child_process'
 import { relative } from 'node:path'
 
-const console = new Console('@hackbg/ubik (run)')
-
 const execPromise = promisify(exec)
 
 export default async function runConcurrently ({
@@ -17,8 +15,8 @@ export default async function runConcurrently ({
   commands = [],
   verbose  = Boolean(process.env.UBIK_VERBOSE)
 }) {
-  console.br().log(`Running ${bold(commands.length)} commands in ${bold(relative(process.cwd(), cwd))}:`)
-  commands.forEach(command=>console.log(' ', command))
+  const console = new Console(`Runner (${bold(relative(process.cwd(), cwd)||'.')})`)
+  commands.forEach(command=>console.debug(command))
   let result
   try {
     return await Promise.all(commands.map(

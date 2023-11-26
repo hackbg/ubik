@@ -21,7 +21,7 @@ export default class Patcher extends Logged {
   }
 
   patchAll () {
-    this.log.br().log(`Patching ${this.files.length} files`)
+    this.log.log(`Patching ${this.files.length} files`)
     for (let i = 0; i < this.files.length; i++) {
       this.patch({ file: this.files[i], index: i+1, total: this.files.length })
     }

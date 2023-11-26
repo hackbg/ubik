@@ -37,7 +37,7 @@ export default class UbikError extends Error {
 
   static RunFailed = class RunFailed extends UbikError {
     constructor (commands = []) {
-      super('Running external commands failed. See log output for details.')
+      super('Running external command(s) failed. See log output for details.')
       this.commands = commands
     }
   }

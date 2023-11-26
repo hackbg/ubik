@@ -32,7 +32,7 @@ try {
 } catch (e) {
   console.br().error(e) 
   if (e.message) {
-    console.br().error(`Ubik failed for the following reason:\n${bold(e.message)}`).br()
+    console.br().error(`Ubik failed:\n\n${bold(e.message)}`).br()
   }
   process.exit(2)
 }

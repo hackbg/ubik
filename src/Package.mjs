@@ -17,6 +17,11 @@ export default class NPMPackage extends Logged {
     this.cwd = cwd
     this.#json = data
   }
+
+  get [Symbol.toStringTag] () {
+    return `${this.name}@${this.version}`
+  }
+
   get versionedName () {
     return `${this.name.replace('@','').replace('/','_')}_${this.version}`
   }
@@ -38,20 +43,26 @@ export default class NPMPackage extends Logged {
     }
     this.#json.main = val
   }
+  get browser () {
+    return this.#json.browser || ''
+  }
+  set browser (val) {
+    if (!(typeof val === 'string')) {
+      throw new Error('browser must be string')
+    }
+    this.#json.browser = val
+  }
   get types () {
     return this.#json.types || ''
   }
   set types (val) {
-    if (!(val instanceof Array)) {
-      throw new Error('types must be array')
+    if (!(typeof val === 'string')) {
+      throw new Error('types must be string')
     }
     this.#json.types = val
   }
-  get browser () {
-    return this.#json.browser || ''
-  }
   get exports () {
-    return this.#json.exports || {}
+    return this.#json.exports
   }
   set exports (val) {
     if (!(val instanceof Object)) {
@@ -61,6 +72,12 @@ export default class NPMPackage extends Logged {
   }
   get files () {
     return this.#json.files || []
+  }
+  set files (val) {
+    if (!(val instanceof Array)) {
+      throw new Error('files must be array')
+    }
+    this.#json.files = val
   }
   get private () {
     return !!this.#json.private
