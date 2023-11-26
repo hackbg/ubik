@@ -1,9 +1,12 @@
 /** This is file is part of "Ubik", (c) 2023 Hack.bg, available under GNU AGPL v3.
   * You should have received a copy of the GNU Affero General Public License
   * along with this program.  If not, see <http://www.gnu.org/licenses/>. */
+import * as acorn from 'acorn'
 import recast from 'recast'
+
+import { Console, bold } from './Logged.mjs'
 import { recastTS } from '../shims.cjs'
-import { Console, bold } from './tool-log.mjs'
+
 const console = new Console('@hackbg/ubik (parse)')
 
 /** Parse source, extracting all import/export declarations. */
@@ -125,5 +128,22 @@ export function getDefault (map, key, def) {
   } else {
     map.set(key, def)
     return def
+  }
+}
+
+export function acornParse (name, source) {
+  const ecmaVersion = process.env.UBIK_ECMA||'latest'
+  try {
+    return acorn.parse(source, {
+      sourceType: 'module',
+      locations: true,
+      //@ts-ignore
+      ecmaVersion
+    })
+  } catch (e) {
+    console.br()
+      .error('Failed to parse', bold(name))
+      .error(bold(e.message), 'at', e.loc.line, ':', e.loc.column)
+      .error(`Source:\n${source}`)
   }
 }

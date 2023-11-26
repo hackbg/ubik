@@ -7,20 +7,18 @@ import { execSync, execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import process from 'node:process'
 import fetch from 'node-fetch'
-import {UbikError, console, bold, required, Package, Logged} from '../tool/tool.mjs'
-import * as Compile from './task-compile.mjs'
+import Error from './Error.mjs'
+import Logged, { console, bold } from './Logged.mjs'
+import Package, { determinePackageManager, runPackageManager } from './Package.mjs'
+import TSCompiler from './TSCompiler.mjs'
 
-export function printPublishUsage () {}
-
-/** Upload one package to NPM. */
-export async function release (cwd, options) {
-  return new NPMPackagePublisher(cwd, options).releasePackage()
+export function printPublishUsage () {
 }
 
-export class NPMPackagePublisher extends Logged {
+export default class Publisher extends Logged {
 
   constructor (cwd, {
-    pkg = new Package.NPMPackage(cwd),
+    pkg = new Package(cwd),
     /** Verbose logging mode. */
     verbose = !!(process.env.UBIK_VERBOSE || process.env.VERBOSE),
     /** Whether to keep the modified package.json and dist files */
@@ -30,7 +28,7 @@ export class NPMPackagePublisher extends Logged {
     /** Publish args. */
     args = [],
     /** Package manager to use. */
-    npm = Package.determinePackageManager(),
+    npm = determinePackageManager(),
     /** Git binary to use. */
     git = 'git',
     /** Fetch function to use */
@@ -57,9 +55,7 @@ export class NPMPackagePublisher extends Logged {
       this.log.warn('Skipping patched package:', this.pkg.name)
       return true
     }
-
     const previousCwd = process.cwd()
-
     try {
       process.chdir(this.cwd)
       this.log.debug('Working in', process.cwd())
@@ -86,17 +82,11 @@ export class NPMPackagePublisher extends Logged {
       } else {
         this.args = makeSureRunIsDry(this.args)
       }
-      /** Determine if this is a TypeScript package that needs to be compiled and patched. */
-      let distFiles = new Set()
+      const options = { dryRun: this.dryRun, pkg: this.pkg, args: this.args, keep: this.keep }
+      const compiler = new TSCompiler(this.cwd, options)
       /** Do the TypeScript magic if necessary. */
       if (this.pkg.isTypeScript) {
-        distFiles = await Compile.prepareTypeScript({
-          cwd: this.cwd,
-          dryRun: this.dryRun,
-          pkgJson: this.pkg,
-          args: this.args,
-          keep: this.keep
-        })
+        await compiler.compileAndPatch()
       }
       try {
         /** If this is not a dry run, publish to NPM */
@@ -110,10 +100,10 @@ export class NPMPackagePublisher extends Logged {
         }
       } catch (e) {
         /** Restore everything to a (near-)pristine state. */
-        Compile.revertModifications({ cwd: this.cwd, keep: this.keep, distFiles })
+        compiler.revert()
         throw e
       }
-      Compile.revertModifications({ cwd: this.cwd, keep: this.keep, distFiles })
+      compiler.revert()
       this.log.debug('Returning to', previousCwd)
       process.chdir(previousCwd)
       return this.pkg
@@ -125,7 +115,7 @@ export class NPMPackagePublisher extends Logged {
 
   performRelease () {
     console.log(`${this.npm} publish`, ...this.args)
-    return Package.runPackageManager({
+    return runPackageManager({
       cwd: this.cwd,
       npm: this.npm,
       args: ['publish', '--no-git-checks', ...this.args]
@@ -176,7 +166,7 @@ export class NPMPackagePublisher extends Logged {
         //@ts-ignore
         stdio: 'inherit',
       })
-      throw new TagAlreadyExists(tag)
+      throw new Error.TagAlreadyExists(tag)
     } catch (e) {
       if (this.verbose) {
         console.log(`Git tag "${tag}" not found`)
@@ -204,36 +194,15 @@ export class NPMPackagePublisher extends Logged {
       }
       return true
     } else if (response.status !== 404) {
-      throw new NPMErrorCode(response.status, name, version)
+      throw new Error.NPMErrorCode(response.status, name, version)
     }
     return false
   }
 
   preliminaryDryRun () {
-    return Package.runPackageManager({
-      cwd: this.cwd,
-      args: ['publish', '--dry-run', ...this.args]
-    })
+    return runPackageManager({ cwd: this.cwd, args: ['publish', '--dry-run', ...this.args] })
   }
 
-}
-
-export class TagAlreadyExists extends UbikError {
-  constructor (tag) {
-    super([
-      `Git tag ${bold(tag)} already exists. `,
-      `Increment version in package.json or delete tag to proceed.`
-    ].join(' '))
-  }
-}
-
-export class NPMErrorCode extends UbikError {
-  constructor (code, name, version) {
-    super([
-      `ubik: NPM returned ${bold(String(code))}`,
-      `when looking for ${bold(name)} @ ${bold(version)}`
-    ].join(' '))
-  }
 }
 
 export function makeSureRunIsDry (publishArgs = []) {

@@ -6,9 +6,8 @@ import { resolve, relative, dirname } from 'node:path'
 import { readFileSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import fastGlob from 'fast-glob'
-import Package, { console, bold } from './package.mjs'
-import * as Task from './task/task.mjs'
-import * as Tool from './tool/tool.mjs'
+import { console, bold } from './package.mjs'
+import * as Ubik from './ubik.mjs'
 
 const argv = [...process.argv]
 let interpreter = argv.shift()
@@ -46,7 +45,7 @@ process.exit(0)
 async function dispatch (command) {
   switch (command) {
     case '--help': {
-      Task.printHelp()
+      Ubik.printHelp()
       return 1
     }
     case 'split-types': {
@@ -54,7 +53,7 @@ async function dispatch (command) {
         console.error('You did not provide any input directories (try "." or "./src").')
         return 1
       }
-      const resolver = new Tool.Resolve.Resolver()
+      const resolver = new Ubik.Resolver()
       resolver.load(argv).patch().save(dryRun)
       return 0
     }
@@ -100,7 +99,7 @@ async function dispatch (command) {
         console.br()
         console.log('Patching', bold(path))
         for (const packageName of pkgs) {
-          Task.Stars.separateNamespaceImport({ path, packageName, dryRun })
+          Ubik.separateNamespaceImport({ path, packageName, dryRun })
         }
       }
       return 0
@@ -110,52 +109,52 @@ async function dispatch (command) {
         console.error('You did not provide any input directories.')
         return 1
       }
-      const resolver = new Tool.Resolve.Resolver().load(argv)
-      Task.Dirs.fixImportDirs(resolver, dryRun)
+      const resolver = new Ubik.Resolver().load(argv)
+      Ubik.Dirs.fixImportDirs(resolver, dryRun)
       return 0
     }
     case 'merge-package': {
       if (argv.length === 0) {
-        Task.Merge.printUsageOfMerge()
+        Ubik.Merge.printUsageOfMerge()
         console.error('You did not provide any inputs.')
         return 1
       }
       const split = argv.indexOf('--')
       if (split === -1) {
-        Task.Merge.printUsageOfMerge()
+        Ubik.Merge.printUsageOfMerge()
         console.error('The command line did not contain the "--" separator.')
         return 1
       }
       const pkgs = argv.slice(0, split)
       const dirs = argv.slice(split + 1)
       if (dirs.length < 1) {
-        Task.Merge.printUsageOfMerge()
+        Ubik.Merge.printUsageOfMerge()
         console.error('You did not provide any packages to merge.')
         return 1
       }
       if (dirs.length < 1) {
-        Task.Merge.printUsageOfMerge()
+        Ubik.Merge.printUsageOfMerge()
         console.error('You did not provide any sources to process.')
         return 1
       }
-      const resolver = new Tool.Resolve.Resolver().load(dirs).load(pkgs)
-      Task.Merge.redirectToRelative(resolver, pkgs, dryRun)
+      const resolver = new Ubik.Resolver().load(dirs).load(pkgs)
+      Ubik.Merge.redirectToRelative(resolver, pkgs, dryRun)
       return 0
     }
     case 'make-import-map': {
-      Task.ImportMap.generateImportMap()
+      Ubik.ImportMap.generateImportMap()
       return 0
     }
     case 'compile': {
-      await Task.Compile.prepareTypeScript({ dryRun, cwd: process.cwd(), keep: true })
+      await new Ubik.TSCompiler(process.cwd(), { dryRun, keep: true }).compileAndPatch()
       return 0
     }
     case 'release': {
-      await Task.Publish.release(process.cwd(), { dryRun, args: argv })
+      await new Ubik.Publisher(process.cwd(), { dryRun, args: argv }).releasePackage()
       return 0
     }
     default: {
-      Task.printUsage()
+      Ubik.printUsage()
       if (command) {
         console.error(bold(command), 'is not a supported command. Try one of above.')
       }

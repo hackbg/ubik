@@ -2,7 +2,7 @@
   * You should have received a copy of the GNU Affero General Public License
   * along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 import { relative } from 'node:path'
-import { getDefault } from '../tool/tool-parse.mjs'
+import { getDefault } from './parse.mjs'
 import { Console, bold } from '@hackbg/logs'
 const console = new Console('@hackbg/ubik (split)')
 

@@ -3,10 +3,13 @@
   * along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 import { relative, dirname } from 'node:path'
 import { writeFileSync } from 'node:fs'
+
 import recast from 'recast'
+
 import { Console, bold } from '@hackbg/logs'
-import { UbikError, required } from '../tool/tool-error.mjs'
-import { TSFile, join } from '../tool/tool-resolve.mjs'
+
+import Error from './Error.mjs'
+import { TSFile, join } from './Resolver.mjs'
 
 const console = new Console('ubik: merge packages')
 
@@ -19,16 +22,16 @@ export function redirectToRelative (resolver, subPackages, dry) {
 }
 
 export function redirectToRelativePackage ({
-  resolver = required('resolver'),
-  path     = required('path'),
+  resolver = Error.required('resolver'),
+  path     = Error.required('path'),
   dry      = true
 }) {
   path = `${path}/package.json`
   const subPkg = resolver.get(path)
   if (!subPkg) {
-    throw new UbikError(`missing in resolver: ${path}`)
+    throw new Error(`missing in resolver: ${path}`)
   }
-  const { name = required(`name (in ${path})`) } = subPkg.parse()
+  const { name = Error.required(`name (in ${path})`) } = subPkg.parse()
   const prefix = `${name}/`
   path = join(resolver.root, path)
 
@@ -50,11 +53,11 @@ export function redirectToRelativePackage ({
 }
 
 export function redirectToRelativePackageEntry ({
-  resolver = required('resolver'),
-  name     = required('name'),
-  path     = required('path'),
-  prefix   = required('prefix'),
-  entry    = required('entry { path, parsed }')
+  resolver = Error.required('resolver'),
+  name     = Error.required('name'),
+  path     = Error.required('path'),
+  prefix   = Error.required('prefix'),
+  entry    = Error.required('entry { path, parsed }')
 }) {
   recast.visit(entry.parsed, {
     visitImportDeclaration (declaration) {
@@ -81,11 +84,11 @@ export function redirectToRelativePackageEntry ({
 }
 
 export function getRelativeSpecifier ({
-  resolver  = required('resolver'),
-  entry     = required('entry { path, parsed }'),
-  path      = required('path'),
-  prefix    = required('prefix'),
-  specifier = required('specifier'),
+  resolver  = Error.required('resolver'),
+  entry     = Error.required('entry { path, parsed }'),
+  path      = Error.required('path'),
+  prefix    = Error.required('prefix'),
+  specifier = Error.required('specifier'),
 } = {}) {
   if (specifier.startsWith(prefix)) {
     let subPrefix = relative(dirname(entry.path), resolver.root)

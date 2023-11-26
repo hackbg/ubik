@@ -3,10 +3,14 @@
   * along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { relative, dirname, resolve, join as joinPath, sep } from 'node:path'
+
 import recast from 'recast'
-import { getImportsExports, getDefault } from './tool-parse.mjs'
-import { separateTypeImports } from '../task/task-split.mjs'
-import { Console, bold } from './tool-log.mjs'
+
+import { getImportsExports, getDefault } from './parse.mjs'
+import { separateTypeImports } from './split.mjs'
+
+import { Console, bold } from './Logged.mjs'
+
 const console = new Console('@hackbg/ubik (resolve)')
 
 /** Join path fragments, enforcing Unix-style path separator. */
@@ -17,7 +21,7 @@ export function join (...fragments) {
 /** The resolver class is the root of an Ubik run.
   * It keeps track of all paths that are part of the
   * codebase that is being modified. */
-export class Resolver extends Map {
+export default class Resolver extends Map {
   /** Create a new resolver. */
   constructor (root = '.') {
     super()

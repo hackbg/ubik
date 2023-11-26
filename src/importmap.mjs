@@ -6,7 +6,9 @@ import { readFileSync, writeFileSync, statSync, existsSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { relative, resolve, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { console, bold, required } from '../tool/tool.mjs'
+
+import { console, bold } from './Logged.mjs'
+import Error from './Error.mjs'
 
 const run = (cmd, ...args) => spawnSync(cmd, args, { maxBuffer: Infinity }).stdout.toString()
 
@@ -51,10 +53,10 @@ export async function generateImportMap ({
 
   // Rule 01: Add main entrypoint of package.
   async function addMain (depth, {
-    scope    = required('scope')    || '',
-    name     = required('name')     || '',
-    relpath  = required('relpath')  || '',
-    manifest = required('manifest') || { main: '', module: '', exports: {} }
+    scope    = Error.required('scope')    || '',
+    name     = Error.required('name')     || '',
+    relpath  = Error.required('relpath')  || '',
+    manifest = Error.required('manifest') || { main: '', module: '', exports: {} }
   } = {}) {
     const { main, module, exports = {} } = manifest
     // Rule 01A: "module" overrides "main", defaulting to "index.js"
@@ -86,10 +88,10 @@ export async function generateImportMap ({
 
   // Rule 02: Add contents of "exports"
   async function addExports (depth, {
-    scope    = required('scope')    || '',
-    name     = required('name')     || '',
-    relpath  = required('relpath')  || '',
-    manifest = required('manifest') || { main: '', module: '', exports: {} }
+    scope    = Error.required('scope')    || '',
+    name     = Error.required('name')     || '',
+    relpath  = Error.required('relpath')  || '',
+    manifest = Error.required('manifest') || { main: '', module: '', exports: {} }
   } = {}) {
     const { exports = {} } = manifest
     const selfRefs = importMap.scopes[`/${relpath}/`] ??= {}
@@ -115,9 +117,9 @@ export async function generateImportMap ({
   }
 
   async function addImports (depth, {
-    scope   = required('scope')    || '',
-    name    = required('name')     || '',
-    relpath = required('relpath')  || '',
+    scope   = Error.required('scope')    || '',
+    name    = Error.required('name')     || '',
+    relpath = Error.required('relpath')  || '',
     imports = {}
   }) {
     const selfRefs = importMap.scopes[`/${relpath}/`] ??= {}

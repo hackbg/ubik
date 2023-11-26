@@ -4,7 +4,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import recast from 'recast'
 import { recastTS } from '../shims.cjs'
-import { console, bold } from '../tool/tool.mjs'
+import { console, bold } from './Logged.mjs'
 
 const parse = source => recast.parse(source, { parser: recastTS })
 

@@ -2,9 +2,7 @@
   "include": [
     "*.cjs",
     "*.mjs",
-    "task/*",
-    "tool/*",
-    "test/*",
+    "src/*",
     ".fixtures/fixtures.mjs",
     "ubik.d.ts"
   ],

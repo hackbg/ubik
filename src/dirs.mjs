@@ -3,16 +3,18 @@
   * along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 import { relative, dirname } from 'node:path'
 import { writeFileSync } from 'node:fs'
-import { Resolve } from '../tool/tool.mjs'
+
 import recast from 'recast'
 
-import { Console, bold } from '@hackbg/logs'
+import { TSFile } from './Resolver.mjs'
+import { Console, bold } from './Logged.mjs'
+
 const console = new Console('add directory index')
 
 export function fixImportDirs (resolver, dry) {
 
   resolver.forEach(entry => {
-    if (!(entry instanceof Resolve.TSFile)) return
+    if (!(entry instanceof TSFile)) return
     recast.visit(entry.parsed, {
       visitImportDeclaration,
       visitExportAllDeclaration,
