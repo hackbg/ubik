@@ -36,6 +36,7 @@ printHelp(
 )
 
 await import('./src/TSCompiler.test.mjs')
+await import('./src/Patcher.test.mjs')
 await import('./src/Package.test.mjs')
 await import('./src/run.test.mjs')
 
