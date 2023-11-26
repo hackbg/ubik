@@ -14,26 +14,30 @@ const previousCwd = process.cwd()
 for (const cwd of [ fixture('publish-esm'), fixture('publish-cjs') ]) {
   try {
     await Publish.printPublishUsage()
-    assert(Publish.ensureFreshTag({ name: 'foo', version: 'bar' }))
-    assert(Publish.performRelease({ cwd, npm: 'true', args: [] }) || true)
-    assert(Publish.tagRelease({ cwd, tag: 'test', git: 'true' }) || true)
 
-    assert(await Publish.isPublished({
+    assert(new Publish.NPMPackagePublisher(cwd, { git: 'true' })
+      .ensureFreshTag({ name: 'foo', version: 'bar' }))
+    assert(new Publish.NPMPackagePublisher(cwd, { npm: 'true', args: [] })
+      .performRelease || true)
+    assert(new Publish.NPMPackagePublisher(cwd, { git: 'true' })
+      .tagRelease({ tag: 'test' }) || true)
+
+    assert(await new Publish.NPMPackagePublisher(cwd, {
       verbose: true,
       dryRun: false,
       //@ts-ignore
       fetch: () => Promise.resolve({ status: 200 }),
-    }))
+    }).isPublished({ name: 'x', version: 'y' }))
 
-    equal(await Publish.isPublished({
+    equal(await new Publish.NPMPackagePublisher(cwd, {
       //@ts-ignore
       fetch: () => Promise.resolve({ status: 404 })
-    }), false)
+    }).isPublished({ name: 'x', version: 'y' }), false)
 
-    rejects(()=>Publish.isPublished({
+    rejects(()=>new Publish.NPMPackagePublisher(cwd, {
       //@ts-ignore
       fetch: () => Promise.resolve({ status: 429 })
-    }))
+    }).isPublished({ name: 'x', version: 'y' }))
 
     deepEqual(Publish.makeSureRunIsDry(), ['--dry-run'])
     deepEqual(Publish.makeSureRunIsDry(['foo']), ['--dry-run', 'foo'])
@@ -52,7 +56,9 @@ for (const cwd of [ fixture('publish-esm'), fixture('publish-cjs') ]) {
     assert(Publish.release(cwd, {
       dryRun: true, npm: 'true', git: 'true',
       //@ts-ignore
-      fetch: () => Promise.resolve({ status: 404 })
+      fetch: () => Promise.resolve({ status: 404 }),
+
+      pkg: { name: 'foo', version: 'bar', main: '' }
     }))
 
   } finally {

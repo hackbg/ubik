@@ -3,6 +3,7 @@
   "version": "2.0.8",
   "type": "module",
   "main": "ubik.mjs",
+  "types": "ubik.d.ts",
   "homepage": "https://github.com/hackbg/ubik",
   "repository": "hackbg/ubik",
   "bin": {

@@ -1,11 +1,11 @@
 /** This is file is part of "Ubik", (c) 2023 Hack.bg, available under GNU AGPL v3.
   * You should have received a copy of the GNU Affero General Public License
   * along with this program.  If not, see <http://www.gnu.org/licenses/>. */
-import { join, dirname, basename, isAbsolute, relative } from 'node:path'
+import { resolve, join, dirname, basename, isAbsolute, relative } from 'node:path'
 import { readFileSync } from 'node:fs'
 import { execSync, execFileSync, spawnSync } from 'node:child_process'
 import { UbikError } from './tool-error.mjs'
-import { Console, bold } from './tool-log.mjs'
+import { Console, bold, Logged } from './tool-log.mjs'
 const console = new Console('@hackbg/ubik (package)')
 
 // Changes x.a to x.b:
@@ -16,6 +16,33 @@ export function replaceExtension (x, a, b) {
 // Convert absolute path to relative
 export function toRel (cwd, path) {
   return `./${isAbsolute(path)?relative(cwd, path):path}`
+}
+
+export class NPMPackage extends Logged {
+  #json
+  constructor (cwd) {
+    super()
+    this.cwd = cwd
+    this.#json = JSON.parse(readFileSync(resolve(cwd, 'package.json'), 'utf8'))
+  }
+  get name () {
+    return this.#json.name || ''
+  }
+  get version () {
+    return this.#json.version || ''
+  }
+  get main () {
+    return this.#json.main || ''
+  }
+  get private () {
+    return !!this.#json.private
+  }
+  get ubik () {
+    return this.#json.ubik
+  }
+  get isTypeScript () {
+    return !!(process.env.UBIK_FORCE_TS) || this.main.endsWith('.ts')
+  }
 }
 
 /** Load package.json. Bail if already modified. */

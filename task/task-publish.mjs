@@ -7,183 +7,215 @@ import { execSync, execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import process from 'node:process'
 import fetch from 'node-fetch'
-import {UbikError, console, bold, required, Package} from '../tool/tool.mjs'
+import {UbikError, console, bold, required, Package, Logged} from '../tool/tool.mjs'
 import * as Compile from './task-compile.mjs'
 
-export function printPublishUsage () {
-  console.info(
-    `Usage:\n
-    ${bold('ubik fix')}   - apply compatibility fix without publishing
-    ${bold('ubik dry')}   - test publishing of package with compatibility fix
-    ${bold('ubik wet')}   - publish package with compatibility fix
-    ${bold('ubik clean')} - delete compiled files`
-  )
+export function printPublishUsage () {}
+
+/** Upload one package to NPM. */
+export async function release (cwd, options) {
+  return new NPMPackagePublisher(cwd, options).releasePackage()
 }
 
-/** Perform a release. */
-export async function release (cwd, {
-  /** Whether to keep the modified package.json and dist files */
-  keep = false,
-  /** Whether to actually publish to NPM, or just go through the movements ("dry run")  */
-  dryRun = true,
-  /** Publish args. */
-  args = [],
-  /** Package manager to use. */
-  npm = Package.determinePackageManager(),
-  /** Git binary to use. */
-  git = 'git',
-  /** Fetch function to use */
-  fetch = globalThis.fetch,
-  /** Whether the files should be compiled from TypeScript. */
-  isTypeScript = process.env.UBIK_FORCE_TS 
-} = {}) {
-  let previousCwd = process.cwd()
-  process.chdir(cwd)
-  /** Need the contents of package.json and a way to restore it after modification. */
-  const { pkgJson, skip } = Package.readPackageJson({ cwd })
-  const { name, version } = pkgJson
-  if (skip) {
-    return
+export class NPMPackagePublisher extends Logged {
+
+  constructor (cwd, {
+    pkg = new Package.NPMPackage(cwd),
+    /** Verbose logging mode. */
+    verbose = !!(process.env.UBIK_VERBOSE || process.env.VERBOSE),
+    /** Whether to keep the modified package.json and dist files */
+    keep = false,
+    /** Whether to actually publish to NPM, or just go through the movements ("dry run")  */
+    dryRun = true,
+    /** Publish args. */
+    args = [],
+    /** Package manager to use. */
+    npm = Package.determinePackageManager(),
+    /** Git binary to use. */
+    git = 'git',
+    /** Fetch function to use */
+    fetch = globalThis.fetch,
+  } = {}) {
+    super()
+    this.cwd = cwd
+    this.pkg = pkg
+    this.verbose = verbose
+    this.keep = keep
+    this.dryRun = dryRun
+    this.fetch = fetch
+    this.args = args
+    this.npm = npm
+    this.git = git
   }
-  /** First deduplication: Make sure the Git tag doesn't exist. */
-  let tag
-  if (name) {
-    tag = ensureFreshTag({ cwd, name, version })
-  }
-  /** Second deduplication: Make sure the library is not already published. */
-  if (await isPublished({ name, version, dryRun, fetch })) {
-    console.warn(
-      bold(version), 'is already published. Increment version in package.json to publish.'
-    )
-    return
-  }
-  /** Print the contents of package.json if we'll be publishing. */
-  if (process.env.UBIK_VERBOSE) {
-    console.log(`Original package.json:\n${JSON.stringify(pkgJson, null, 2)}`)
-  }
-  /** In wet mode, try a dry run first. */
-  if (!dryRun) {
-    preliminaryDryRun({ cwd, args })
-  } else {
-    args = makeSureRunIsDry(args)
-  }
-  /** Determine if this is a TypeScript package that needs to be compiled and patched. */
-  isTypeScript ||= (pkgJson.main||'').endsWith('.ts')
-  let distFiles = new Set()
-  if (isTypeScript) {
-    /** Do the TypeScript magic if necessary. */
-    distFiles = await Compile.prepareTypeScript({ cwd, dryRun, pkgJson, args, keep })
-  }
-  try {
-    /** If this is not a dry run, publish to NPM */
-    if (!dryRun) {
-      performRelease({ cwd, npm, args })
-      if (!args.includes('--dry-run') && tag) {
-        tagRelease({ cwd, tag, git })
+
+  async releasePackage () {
+    if (this.pkg.private) {
+      this.log.info('Skipping private package:', this.pkg.name)
+      return true
+    }
+    if (this.pkg.ubik && !!process.env.UBIK_SKIP_FIXED) {
+      this.log.warn('Skipping patched package:', this.pkg.name)
+      return true
+    }
+
+    const previousCwd = process.cwd()
+
+    try {
+      process.chdir(this.cwd)
+      this.log.debug('Working in', process.cwd())
+      const { name, version } = this.pkg
+      /** Make sure Git tag doesn't exist. */
+      let tag
+      if (name) {
+        tag = this.ensureFreshTag()
       }
-    } else {
-      console.log('Dry run successful:', tag)
+      /** Second deduplication: Make sure the library is not already published. */
+      if (await this.isPublished()) {
+        console.warn(
+          bold(version), 'is already published. Increment version in package.json to publish.'
+        )
+        return
+      }
+      /** Print the contents of package.json if we'll be publishing. */
+      if (this.verbose) {
+        console.log(`Original package.json:\n${JSON.stringify(this.pkg, null, 2)}`)
+      }
+      /** In wet mode, try a dry run first. */
+      if (!this.dryRun) {
+        this.preliminaryDryRun()
+      } else {
+        this.args = makeSureRunIsDry(this.args)
+      }
+      /** Determine if this is a TypeScript package that needs to be compiled and patched. */
+      let distFiles = new Set()
+      /** Do the TypeScript magic if necessary. */
+      if (this.pkg.isTypeScript) {
+        distFiles = await Compile.prepareTypeScript({
+          cwd: this.cwd,
+          dryRun: this.dryRun,
+          pkgJson: this.pkg,
+          args: this.args,
+          keep: this.keep
+        })
+      }
+      try {
+        /** If this is not a dry run, publish to NPM */
+        if (!this.dryRun) {
+          this.performRelease()
+          if (!this.args.includes('--dry-run') && tag) {
+            this.tagRelease({ tag })
+          }
+        } else {
+          console.log('Dry run successful:', tag)
+        }
+      } catch (e) {
+        /** Restore everything to a (near-)pristine state. */
+        Compile.revertModifications({ cwd: this.cwd, keep: this.keep, distFiles })
+        throw e
+      }
+      Compile.revertModifications({ cwd: this.cwd, keep: this.keep, distFiles })
+      this.log.debug('Returning to', previousCwd)
+      process.chdir(previousCwd)
+      return this.pkg
+    } finally {
+      this.log.debug('Returning to', previousCwd)
+      process.chdir(previousCwd)
     }
-  } catch (e) {
-    /** Restore everything to a (near-)pristine state. */
-    Compile.revertModifications({ cwd, keep, distFiles })
-    throw e
-  }
-  Compile.revertModifications({ cwd, keep, distFiles })
-  process.chdir(previousCwd)
-  return pkgJson
-}
-
-export function performRelease ({
-  cwd = process.cwd(),
-  npm = Package.determinePackageManager(),
-  args = []
-} = {}) {
-  console.log(`${npm} publish`, ...args)
-  return Package.runPackageManager({ cwd, npm, args: ['publish', '--no-git-checks', ...args] })
-}
-
-export function tagRelease ({
-  cwd    = process.cwd(),
-  tag    = undefined,
-  noTag  = Boolean(process.env.UBIK_NO_TAG),
-  noPush = Boolean(process.env.UBIK_NO_PUSH),
-  git    = 'git'
-} = {}) {
-
-  console
-    .br()
-    .log('Published:', tag)
-
-  // Add Git tag
-  if (noTag) {
-    return {}
   }
 
-  execSync(`${git} tag -f "${tag}"`, { cwd, stdio: 'inherit' })
-
-  if (noPush) {
-    return { tag }
-  }
-
-  execSync(`${git} push --tags`, { cwd, stdio: 'inherit' })
-
-  return { tag, pushed: true }
-}
-
-// Bail if Git tag already exists
-export function ensureFreshTag ({
-  cwd     = process.cwd(),
-  name    = required('name'),
-  version = required('version')
-} = {}) {
-  const tag = `npm/${name}/${version}`
-  try {
-    execFileSync('git', ['rev-parse', tag], {
-      cwd: process.cwd(),
-      env: process.env,
-      //@ts-ignore
-      stdio: 'inherit',
+  performRelease () {
+    console.log(`${this.npm} publish`, ...this.args)
+    return Package.runPackageManager({
+      cwd: this.cwd,
+      npm: this.npm,
+      args: ['publish', '--no-git-checks', ...this.args]
     })
-    throw new TagAlreadyExists(tag)
-  } catch (e) {
-    if (process.env.UBIK_VERBOSE) console.log(`Git tag "${tag}" not found`)
-    return tag
   }
-}
 
-export async function isPublished ({
-  name,
-  version,
-  url     = `https://registry.npmjs.org/${name}/${version}`,
-  fetch   = globalThis.fetch,
-  dryRun  = true,
-  verbose = Boolean(process.env.UBIK_VERBOSE)
-}) {
-  const response = await fetch(url)
-  if (response.status === 200) {
-    if (verbose) {
-      console.log(`NPM package ${name} ${version} already exists.`)
+  tagRelease ({
+    tag    = undefined,
+    noTag  = Boolean(process.env.UBIK_NO_TAG),
+    noPush = Boolean(process.env.UBIK_NO_PUSH),
+  } = {}) {
+    console.br().log('Published:', tag)
+    // Add Git tag
+    if (noTag) {
+      return {}
     }
-    if (!dryRun) {
-      console.log(`OK, not publishing:`, url)
+    execSync(
+      `${this.git} tag -f "${tag}"`,
+      { cwd: this.cwd, stdio: 'inherit' }
+    )
+    if (noPush) {
+      return { tag }
     }
-    return true
-  } else if (response.status !== 404) {
-    throw new NPMErrorCode(response.status, name, version)
+    execSync(
+      `${this.git} push --tags`,
+      { cwd: this.cwd, stdio: 'inherit' }
+    )
+    return {
+      tag,
+      pushed: true
+    }
   }
-  return false
-}
 
-export function preliminaryDryRun ({ cwd, args }) {
-  return Package.runPackageManager({ cwd, args: ['publish', '--dry-run', ...args] })
-}
-
-export function makeSureRunIsDry (publishArgs = []) {
-  if (!publishArgs.includes('--dry-run')) {
-    publishArgs = ['--dry-run', ...publishArgs]
+  /** Bail if Git tag already exists.
+    * @arg {{ name: string, version: string }} pkg */
+  ensureFreshTag ({ name, version } = this.pkg) {
+    if (!name) {
+      throw new Error('missing package name')
+    }
+    if (!version) {
+      throw new Error('missing package version')
+    }
+    const tag = `npm/${name}/${version}`
+    try {
+      execFileSync(this.git, ['rev-parse', tag], {
+        cwd: this.cwd,
+        env: process.env,
+        //@ts-ignore
+        stdio: 'inherit',
+      })
+      throw new TagAlreadyExists(tag)
+    } catch (e) {
+      if (this.verbose) {
+        console.log(`Git tag "${tag}" not found`)
+      }
+      return tag
+    }
   }
-  return publishArgs
+
+  /** @arg {{ name: string, version: string }} pkg */
+  async isPublished ({ name, version } = this.pkg) {
+    if (!name) {
+      throw new Error('missing package name')
+    }
+    if (!version) {
+      throw new Error('missing package version')
+    }
+    const url = `https://registry.npmjs.org/${name}/${version}` 
+    const response = await this.fetch(url)
+    if (response.status === 200) {
+      if (this.verbose) {
+        console.log(`NPM package ${name} ${version} already exists.`)
+      }
+      if (!this.dryRun) {
+        console.log(`OK, not publishing:`, url)
+      }
+      return true
+    } else if (response.status !== 404) {
+      throw new NPMErrorCode(response.status, name, version)
+    }
+    return false
+  }
+
+  preliminaryDryRun () {
+    return Package.runPackageManager({
+      cwd: this.cwd,
+      args: ['publish', '--dry-run', ...this.args]
+    })
+  }
+
 }
 
 export class TagAlreadyExists extends UbikError {
@@ -202,4 +234,11 @@ export class NPMErrorCode extends UbikError {
       `when looking for ${bold(name)} @ ${bold(version)}`
     ].join(' '))
   }
+}
+
+export function makeSureRunIsDry (publishArgs = []) {
+  if (!publishArgs.includes('--dry-run')) {
+    publishArgs = ['--dry-run', ...publishArgs]
+  }
+  return publishArgs
 }
