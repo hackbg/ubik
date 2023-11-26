@@ -30,10 +30,10 @@ function setDryRun () {
 try {
   process.exit(await dispatch(command))
 } catch (e) {
-  console.br().error(e) 
   if (e.message) {
     console.br().error(`Ubik failed:\n\n${bold(e.message)}`).br()
   }
+  console.error(`${e.stack.slice(e.stack.indexOf('\n'))}\n`)
   process.exit(2)
 }
 
