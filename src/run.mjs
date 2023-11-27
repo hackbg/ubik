@@ -5,7 +5,7 @@ import Error from './Error.mjs'
 import { Console, bold } from './Logged.mjs'
 
 import { promisify } from 'node:util'
-import { exec, execSync, execFileSync } from 'node:child_process'
+import { exec, execSync, execFileSync, spawnSync } from 'node:child_process'
 import { relative } from 'node:path'
 
 const execPromise = promisify(exec)
@@ -26,4 +26,8 @@ export default async function runConcurrently ({
     process.stdout.write(e.stdout)
     throw new Error.RunFailed(commands)
   }
+}
+
+export function runLong (cwd, cmd, ...args) {
+  return spawnSync(cmd, args, { maxBuffer: Infinity, cwd }).stdout.toString()
 }

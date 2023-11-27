@@ -2,20 +2,16 @@
   * You should have received a copy of the GNU Affero General Public License
   * along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 
-
-export { default as Error } from './src/Error.mjs'
-export * as Parse from './src/parse.mjs'
-export { default as Resolver } from './src/Resolver.mjs'
-export * from './src/run.mjs'
-export { default as Package } from './src/Package.mjs'
-export { default as Publisher } from './src/Publisher.mjs'
-export { default as TSCompiler } from './src/TSCompiler.mjs'
 import Ubik, { console, bold } from './package.mjs'
-export * as Dirs from './src/dirs.mjs'
-export * as ImportMap from './src/importmap.mjs'
-export * as Merge from './src/merge.mjs'
-export * as Split from './src/split.mjs'
-export * from './src/namespace.mjs'
+export { default as Error } from './src/Error.mjs'
+export * from './src/Error.mjs'
+export { default as Resolver } from './src/Resolver.mjs'
+export * from './src/Resolver.mjs'
+export { default as Patcher } from './src/Patcher.mjs'
+export * from './src/Patcher.mjs'
+export { default as Package } from './src/Package.mjs'
+export { Publisher, Compiler } from './src/Publisher.mjs'
+export { default as ImportMap } from './src/ImportMap.mjs'
 
 export function printUsage ({ info } = console) {
   info('Welcome to', bold(`@hackbg/ubik ${Ubik.version}`))

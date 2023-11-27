@@ -7,52 +7,77 @@ import { spawnSync } from 'node:child_process'
 import { relative, resolve, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-import { console, bold } from './Logged.mjs'
+import Logged, { bold } from './Logged.mjs'
 import Error from './Error.mjs'
-
-const run = (cmd, ...args) => spawnSync(cmd, args, { maxBuffer: Infinity }).stdout.toString()
+import { runLong } from './run.mjs'
 
 const indent = x => new Array(x).fill(' ').join('')
 
-export async function generateImportMap ({
-  output       = 'importmap.json',
-  manifest     = JSON.parse(run('pnpm', 'ls', '--json', '--depth', 'Infinity'))[0],
-  importMap    = { imports: {}, scopes: {} },
-  patchMain    = x => {},
-  patchExports = x => {},
-  patchImports = x => {},
-  write        = true
-} = {}) {
+export default class ImportMap extends Logged {
 
-  console.log({manifest})
-
-  await addToImportMap(0, manifest.name, manifest.version, manifest.dependencies, importMap.imports)
-
-  if (write) {
-    writeFileSync(output, JSON.stringify(importMap, null, 2))
+  static async fromPNPM ({
+    cwd = process.cwd(),
+    data = JSON.parse(runLong(cwd, 'pnpm', 'ls', '--json', '--depth', 'Infinity'))[0],
+    write = false,
+    patchMain = x => {},
+    patchExports = x => {},
+    patchImports = x => {},
+  } = {}) {
+    const map = new ImportMap({
+      path: resolve(cwd, 'importmap.json'),
+      patchMain,
+      patchExports,
+      patchImports,
+    })
+    console.log({data})
+    await map.add(0, data.name, data.version, data.dependencies)
+    if (write) writeFileSync(map.path, map.stringified)
+    return map
   }
 
-  async function addToImportMap (depth, name, version, deps, scope) {
+  constructor ({
+    path = 'importmap.json',
+    scopes = {},
+    imports = {},
+    patchMain = x => {},
+    patchExports = x => {},
+    patchImports = x => {},
+  } = {}) {
+    super()
+    this.path         = path
+    this.scopes       = scopes
+    this.imports      = imports
+    this.patchMain    = patchMain
+    this.patchExports = patchExports
+    this.patchImports = patchImports
+  }
+
+  get stringified () {
+    return JSON.stringify({ imports: this.imports, scopes: this.scopes }, null, 2)
+  }
+
+  async add (depth, name, version, deps = {}, scope = this.imports) {
+    this.log.debug('add:', {depth, name, version, deps, scope})
     deps = Object.entries(deps)
     if (deps.length > 0) {
-      console.log(indent(depth), `deps of ${bold(name||'(unnamed package)')} ${version||'(unspecified version)'}:`)
+      this.log.log(indent(depth), `deps of ${bold(name||'(unnamed package)')} ${version||'(unspecified version)'}:`)
       // For each resolved dependency:
       for (const [name, {version, path, dependencies, imports}] of deps) {
         // Load package.json of dependency
         const relpath = relative(process.cwd(), path)
         const manifest = JSON.parse(readFileSync(join(relpath, 'package.json'), 'utf8'))
-        console.log(indent(depth), ` ${bold(name)} (${relpath})`)
-        await addMain(depth, { scope, name, relpath, manifest })
-        const { selfRefs } = await addExports(depth, { scope, name, relpath, manifest })
-        await addImports(depth, { scope, name, relpath, imports })
+        this.log.log(indent(depth), ` ${bold(name)} (${relpath})`)
+        await this.addMain(depth, { scope, name, relpath, manifest })
+        const { selfRefs } = await this.addExports(depth, { scope, name, relpath, manifest })
+        await this.addImports(depth, { scope, name, relpath, imports })
         // Recurse into the dependencies of this dependency:
-        await addToImportMap(depth + 2, name, version, dependencies ?? {}, selfRefs ?? {})
+        await this.addToImportMap(depth + 2, name, version, dependencies ?? {}, selfRefs ?? {})
       }
     }
   }
 
   // Rule 01: Add main entrypoint of package.
-  async function addMain (depth, {
+  async addMain (depth, {
     scope    = Error.required('scope')    || '',
     name     = Error.required('name')     || '',
     relpath  = Error.required('relpath')  || '',
@@ -80,14 +105,14 @@ export async function generateImportMap ({
       target = `./${target}`
       scope[name] = target
       // Log to console:
-      console.log(indent(depth), `  main:`, bold(entrypoint), `-> ${target}`)
+      this.log.log(indent(depth), `  main:`, bold(entrypoint), `-> ${target}`)
       // Extensibility hook
-      await patchMain({ importMap, depth, scope, name, relpath, manifest, entrypoint })
+      await this.patchMain({ importMap, depth, scope, name, relpath, manifest, entrypoint })
     }
   }
 
   // Rule 02: Add contents of "exports"
-  async function addExports (depth, {
+  async addExports (depth, {
     scope    = Error.required('scope')    || '',
     name     = Error.required('name')     || '',
     relpath  = Error.required('relpath')  || '',
@@ -104,19 +129,19 @@ export async function generateImportMap ({
         target = target['default']
       }
       if (target) {
-        console.debug(indent(depth), `  export:`, bold(specifier), '->', bold(target))
+        this.log.debug(indent(depth), `  export:`, bold(specifier), '->', bold(target))
         scope[join(name, specifier)] = `./${join(relpath, target)}`
         selfRefs[join(name, specifier)] = `./${join(relpath, target)}`
       } else {
-        console.warn(indent(depth), `  export:`, bold(specifier), ' - unresolved!', JSON.stringify(entry))
+        this.log.warn(indent(depth), `  export:`, bold(specifier), ' - unresolved!', JSON.stringify(entry))
       }
       // Extensibility hook
-      await patchExports({ importMap, depth, scope, name, relpath, manifest, specifier, entry })
+      await this.patchExports({ importMap, depth, scope, name, relpath, manifest, specifier, entry })
     }
     return { selfRefs }
   }
 
-  async function addImports (depth, {
+  async addImports (depth, {
     scope   = Error.required('scope')    || '',
     name    = Error.required('name')     || '',
     relpath = Error.required('relpath')  || '',
@@ -125,9 +150,9 @@ export async function generateImportMap ({
     const selfRefs = importMap.scopes[`/${relpath}/`] ??= {}
     if (Object.keys(imports).length > 0) {
       for (const [specifier, entry] of Object.entries(imports)) {
-        console.log({specifier, entry})
+        this.log.log({specifier, entry})
         // Extensibility hook
-        await patchImports({ importMap, depth, scope, name, relpath, imports, specifier, entry })
+        await this.patchImports({ importMap, depth, scope, name, relpath, imports, specifier, entry })
       }
     }
   }

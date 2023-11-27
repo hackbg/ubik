@@ -5,11 +5,11 @@ import assert from 'node:assert'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
 import Package from './Package.mjs'
-import TSCompiler from './TSCompiler.mjs'
+import { Compiler } from './Publisher.mjs'
 for (const cwd of [
   join(dirname(fileURLToPath(import.meta.url)), '../.fixtures', 'publish-esm'),
   join(dirname(fileURLToPath(import.meta.url)), '../.fixtures', 'publish-cjs'),
 ]) {
-  const compiler = new TSCompiler(cwd, { pkg: new Package('', { files: [] }), args: [] })
+  const compiler = new Compiler(cwd, { pkg: new Package('', { files: [] }), args: [] })
   assert(await compiler.compileAndPatch())
 }

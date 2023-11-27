@@ -110,43 +110,43 @@ async function dispatch (command) {
         return 1
       }
       const resolver = new Ubik.Resolver().load(argv)
-      Ubik.Dirs.fixImportDirs(resolver, dryRun)
+      Ubik.fixImportDirs(resolver, dryRun)
       return 0
     }
     case 'merge-package': {
       if (argv.length === 0) {
-        Ubik.Merge.printUsageOfMerge()
+        Ubik.printUsageOfMerge()
         console.error('You did not provide any inputs.')
         return 1
       }
       const split = argv.indexOf('--')
       if (split === -1) {
-        Ubik.Merge.printUsageOfMerge()
+        Ubik.printUsageOfMerge()
         console.error('The command line did not contain the "--" separator.')
         return 1
       }
       const pkgs = argv.slice(0, split)
       const dirs = argv.slice(split + 1)
       if (dirs.length < 1) {
-        Ubik.Merge.printUsageOfMerge()
+        Ubik.printUsageOfMerge()
         console.error('You did not provide any packages to merge.')
         return 1
       }
       if (dirs.length < 1) {
-        Ubik.Merge.printUsageOfMerge()
+        Ubik.printUsageOfMerge()
         console.error('You did not provide any sources to process.')
         return 1
       }
       const resolver = new Ubik.Resolver().load(dirs).load(pkgs)
-      Ubik.Merge.redirectToRelative(resolver, pkgs, dryRun)
+      Ubik.redirectToRelative(resolver, pkgs, dryRun)
       return 0
     }
     case 'make-import-map': {
-      Ubik.ImportMap.generateImportMap()
+      Ubik.ImportMap.fromPNPM()
       return 0
     }
     case 'compile': {
-      await new Ubik.TSCompiler(process.cwd(), { dryRun, keep: true }).compileAndPatch()
+      await new Ubik.Compiler(process.cwd(), { dryRun, keep: true }).compileAndPatch()
       return 0
     }
     case 'release': {

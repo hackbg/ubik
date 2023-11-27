@@ -11,15 +11,20 @@ import {
   printUsage,
   printHelp,
   ImportMap,
-  Dirs,
-  Merge,
   separateNamespaceImport,
   Resolver,
   Publisher,
   Package,
+  fixImportDirs,
+  printUsageOfMerge,
+  markIfModified,
+  getRelativeSpecifier,
+  redirectToRelativePackageEntry,
+  redirectToRelativePackage,
+  redirectToRelative
 } from './ubik.mjs'
 import { TSFile } from './src/Resolver.mjs'
-import { printPublishUsage, makeSureRunIsDry } from './src/Publisher.mjs'
+import { makeSureRunIsDry } from './src/Publisher.mjs'
 
 throws(Error.required)
 
@@ -35,7 +40,7 @@ printHelp(
   mute
 )
 
-await import('./src/TSCompiler.test.mjs')
+await import('./src/Publisher.test.mjs')
 await import('./src/Patcher.test.mjs')
 await import('./src/Package.test.mjs')
 await import('./src/run.test.mjs')
@@ -45,7 +50,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { rimraf } from 'rimraf'
 
-await ImportMap.generateImportMap({ write: false, })
+await ImportMap.fromPNPM({ write: false })
 
 throws(()=>new Resolver('./test.mjs'))
 
@@ -138,28 +143,20 @@ throws(()=>new Resolver('./test.mjs'))
 
 {
   const resolver = new Resolver('.fixtures/merge').load(['api', 'lib', 'types'])
-  Dirs.fixImportDirs(resolver, true)
-  Merge.printUsageOfMerge()
-  Merge.markIfModified()
-  Merge.getRelativeSpecifier({
-    resolver, entry: { path: '', parsed: '' }, path: '', prefix: '', specifier: '',
-  })
-  Merge.redirectToRelativePackageEntry({
-    resolver, entry: { path: '', parsed: '' }, name: '', path: '', prefix: '',
-  })
-  Merge.redirectToRelativePackage({
-    resolver, path: 'types', dry: true
-  })
-  Merge.redirectToRelative(resolver, [
-    'types'
-  ])
+  fixImportDirs(resolver, true)
+  printUsageOfMerge()
+  markIfModified()
+  getRelativeSpecifier({ resolver, entry: { path: '', parsed: '' }, path: '', prefix: '', specifier: '', })
+  redirectToRelativePackageEntry({ resolver, entry: { path: '', parsed: '' }, name: '', path: '', prefix: '', })
+  redirectToRelativePackage({ resolver, path: 'types', dry: true })
+  redirectToRelative(resolver, [ 'types' ])
   const previousCwd = process.cwd()
   for (const cwd of [
     fixture('publish-esm'),
     fixture('publish-cjs')
   ]) {
     try {
-      await printPublishUsage()
+      await Publisher.printUsage()
 
       assert(new Publisher(cwd, { git: 'true' })
         .ensureFreshTag({ name: 'foo', version: 'bar' }))
