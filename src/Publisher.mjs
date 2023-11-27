@@ -253,7 +253,7 @@ export class Compiler extends Logged {
     this.verbose = verbose
     this.tsc = tsc
     this.ecmaVersion = ecmaVersion
-    this.compiled = new Set()
+    this.generated = new Set()
     this.keep = keep
   }
 
@@ -359,7 +359,7 @@ export class Compiler extends Logged {
         copyFileSync(srcFile, outFile)
         unlinkSync(srcFile)
         outputs.push(outFile)
-        this.compiled.add(this.toRel(outFile))
+        this.generated.add(this.toRel(outFile))
       }
       //console.log({globs, inputs, outputs})
       //console.log(await fastGlob(['!node_modules', '!**/node_modules', '.ubik/*']))
@@ -438,7 +438,7 @@ export class Compiler extends Logged {
 
     }
 
-    pkg.files = [ ...pkg.files, ...this.compiled ]
+    pkg.files = [ ...pkg.files, ...this.generated ]
 
     if (this.dryRun) {
       this.log.br().info(`Published package.json would be:\n${this.pkg.stringified}`)
@@ -448,7 +448,7 @@ export class Compiler extends Logged {
       writeFileSync(join(this.cwd, 'package.json'), this.pkg.stringified, 'utf8')
     }
 
-    return this.compiled
+    return this.generated
   }
 
   run (...commands) {
@@ -493,7 +493,7 @@ export class Compiler extends Logged {
       unlinkSync(join(this.cwd, 'package.json.bak'))
     }
     this.log.br().log('Deleting generated files...')
-    for (const file of this.compiled) {
+    for (const file of this.generated) {
       unlinkSync(file)
     }
     return true
