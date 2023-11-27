@@ -8,6 +8,7 @@ import { acornParse, TSFile } from './Resolver.mjs'
 import { resolve, dirname, relative } from 'node:path'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 
+import fastGlob from 'fast-glob'
 import recast from 'recast'
 import * as acornWalk from 'acorn-walk'
 import * as astring from 'astring'
@@ -17,24 +18,27 @@ const console = new Console('@hackbg/ubik')
 
 export default class Patcher extends Logged {
 
-  constructor ({ cwd = process.cwd(), dryRun = true, files = [], ext }) {
+  constructor ({
+    cwd    = process.cwd(),
+    dryRun = true,
+  }) {
     super()
     this.cwd     = cwd
     this.dryRun  = dryRun
-    this.files   = files
-    this.patched = {}
-    this.ext     = ext
   }
 
-  patchAll () {
-    this.log.log(`Patching ${this.files.length} files`)
-    for (let i = 0; i < this.files.length; i++) {
-      this.patch({ file: this.files[i], index: i+1, total: this.files.length })
+  patched = {}
+
+  async patchAll (ext) {
+    const files = await fastGlob([`${this.cwd}/*${ext}`, `${this.cwd}/**/*${ext}`])
+    this.log.log(`Patching ${files.length} files`)
+    for (let i = 0; i < files.length; i++) {
+      this.patch({ ext, file: files[i], index: i+1, total: files.length })
     }
     return this.patched
   }
 
-  patch ({ file, index, total }) {
+  patch ({ ext, file, index, total }) {
     throw new Error('abstract')
     return this.patched
   }
@@ -59,6 +63,7 @@ export default class Patcher extends Logged {
 
   static MJS = class MJSPatcher extends Patcher {
     patch ({
+      ext,
       file    = Error.required('file'),
       source  = readFileSync(resolve(this.cwd, file), 'utf8'),
       ast     = acornParse(file, source),
@@ -73,12 +78,12 @@ export default class Patcher extends Logged {
         if (!Patcher.esmDeclarationsToPatch.includes(declaration.type) || !declaration.source?.value) continue
         const oldValue = declaration.source.value
         const isRelative = oldValue.startsWith('./') || oldValue.startsWith('../')
-        const isNotPatched = !oldValue.endsWith(this.ext)
+        const isNotPatched = !oldValue.endsWith(ext)
         if (isRelative && isNotPatched) {
           if (!modified) {
             this.log.log(`(${index}/${total})`, 'Patching', bold(relative(this.cwd, file)))
           }
-          const newValue = `${oldValue}${this.ext}`
+          const newValue = `${oldValue}${ext}`
           this.log.debug(' ', oldValue, '->', newValue)
           Object.assign(declaration.source, { value: newValue, raw: JSON.stringify(newValue) })
           modified = true
@@ -90,6 +95,7 @@ export default class Patcher extends Logged {
 
   static MTS = class MTSPatcher extends Patcher {
     patch ({
+      ext,
       file    = Error.required('file'),
       source  = readFileSync(resolve(this.cwd, file), 'utf8'),
       parsed  = recast.parse(source, { parser: recastTS }),
@@ -102,7 +108,7 @@ export default class Patcher extends Logged {
         if (!Patcher.esmDeclarationsToPatch.includes(declaration.type) || !declaration.source?.value) continue
         const oldValue = declaration.source.value
         const isRelative = oldValue.startsWith('./') || oldValue.startsWith('../')
-        const isNotPatched = !oldValue.endsWith(this.ext)
+        const isNotPatched = !oldValue.endsWith(ext)
         if (isRelative && isNotPatched) {
           if (!modified) {
             this.log.log(`(${index}/${total})`, 'Patching', bold(relative(this.cwd, file)))
@@ -119,13 +125,14 @@ export default class Patcher extends Logged {
 
   static CJS = class CJSPatcher extends Patcher {
     patch ({
+      ext,
       file    = Error.required('file'),
       source  = readFileSync(resolve(this.cwd, file), 'utf8'),
       ast     = acornParse(file, source),
       index   = 0,
       total   = 0,
     }) {
-      const { cwd, log, ext } = this
+      const { cwd, log } = this
       file = resolve(cwd, file)
       let modified = false
       acornWalk.simple(ast, {

@@ -296,37 +296,39 @@ export class Compiler extends Logged {
         ].join(' '))
 
         if (outputs) {
-          revertable(`patch ${outputs}`, ()=>new CodePatcher({
-            cwd:    tempDir,
-            dryRun: this.dryRun,
-            ext:    outputs,
-            files:  this.pkg.files.filter(x=>x.endsWith('.js'))
-          }).patchAll())
+
+          await revertable(`patch ${outputs}`, ()=>new CodePatcher({
+            cwd: tempDir, dryRun: this.dryRun,
+          }).patchAll(outputs))
+
           await revertable(`collect ${outputs}`, ()=>collect(
             tempDir, '.js', cwd, outputs
           ))
+
           if (sourceMaps) {
             await revertable(`collect ${sourceMaps}`, ()=>collect(
               tempDir, '.js.map', cwd, sourceMaps
             ))
           }
+
         }
 
         if (types) {
-          revertable(`patch ${types}`, ()=>new TypePatcher({
-            cwd:    tempDir,
-            dryRun: this.dryRun,
-            ext:    types,
-            files:  this.pkg.files.filter(x=>x.endsWith('.d.ts'))
-          }).patchAll())
+
+          await revertable(`patch ${types}`, ()=>new TypePatcher({
+            cwd: tempDir, dryRun: this.dryRun,
+          }).patchAll(types))
+
           await revertable(`collect ${outputs}`, ()=>collect(
             tempDir, '.d.ts', cwd, types
           ))
+
           if (typeMaps) {
             await revertable(`collect ${typeMaps}`, ()=>collect(
               tempDir, '.d.ts.map', cwd, typeMaps
             ))
           }
+
         }
 
         rimrafSync(tempDir)
