@@ -254,6 +254,7 @@ export class Compiler extends Logged {
     this.tsc = tsc
     this.ecmaVersion = ecmaVersion
     this.compiled = new Set()
+    this.keep = keep
   }
 
   async compileAndPatch () {
@@ -447,6 +448,8 @@ export class Compiler extends Logged {
       writeFileSync(join(this.cwd, 'package.json'), this.pkg.stringified, 'utf8')
     }
 
+    this.revert()
+
     return this.compiled
   }
 
@@ -461,7 +464,7 @@ export class Compiler extends Logged {
         `${bold(source)} failed:`,
         bold(e.message)+'\n'+e.stack.slice(e.stack.indexOf('\n'))
       )
-      this.revert({ keep: false, compiled: this.compiled })
+      this.revert()
       throw e
     }
   }
@@ -470,8 +473,8 @@ export class Compiler extends Logged {
     return toRel(this.cwd, ...args)
   }
 
-  revert ({ keep = false, compiled = new Set(), } = {}) {
-    if (keep) {
+  revert () {
+    if (this.keep) {
       this.log.br().warn(
         "Not restoring original 'package.json'; keeping build artifacts."
       ).warn(
@@ -492,7 +495,7 @@ export class Compiler extends Logged {
       unlinkSync(join(this.cwd, 'package.json.bak'))
     }
     this.log.br().log('Deleting generated files...')
-    for (const file of compiled) {
+    for (const file of this.compiled) {
       unlinkSync(file)
     }
     return true
