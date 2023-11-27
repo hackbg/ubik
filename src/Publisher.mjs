@@ -448,8 +448,6 @@ export class Compiler extends Logged {
       writeFileSync(join(this.cwd, 'package.json'), this.pkg.stringified, 'utf8')
     }
 
-    this.revert()
-
     return this.compiled
   }
 
