@@ -222,14 +222,16 @@ export class Compiler extends Logged {
 
   /** @arg {string} [cwd] root directory of package
     * @arg {object} [options]
-    * @arg {Partial<Package>} [options.pkg]
-    * @arg {string[]}         [options.args]
-    * @arg {boolean}          [options.verbose]
-    * @arg {boolean}          [options.dryRun]
-    * @arg {object}           [options.emit]
-    * @arg {boolean}          [options.keep]
-    * @arg {string}           [options.tsc]
-    * @arg {string}           [options.ecmaVersion]
+    *
+    * @arg {Partial<Package>} [options.pkg] auto created from cwd
+    *
+    * @arg {string[]} [options.args] passed from cli
+    * @arg {boolean}  [options.verbose] passed from env
+    * @arg {boolean}  [options.dryRun] passed from cli
+    * @arg {object}   [options.emit] defaults to emit everything
+    * @arg {boolean}  [options.keep] defaults to false if publishing
+    * @arg {string}   [options.tsc] passed from env
+    * @arg {string}   [options.ecmaVersion] passed from env
     */
   constructor (cwd = process.cwd(), options) {
     const {
@@ -362,8 +364,6 @@ export class Compiler extends Logged {
       //console.log(await fastGlob(['!node_modules', '!**/node_modules', '.ubik/*']))
     }
 
-    pkg.files = [ ...pkg.files, ...this.compiled ]
-
     if (!pkg.main) {
       this.log.warn('No "main" in package.json, defaulting to index.ts')
       pkg.main = 'index.ts'
@@ -436,6 +436,8 @@ export class Compiler extends Logged {
       }
 
     }
+
+    pkg.files = [ ...pkg.files, ...this.compiled ]
 
     if (this.dryRun) {
       this.log.br().info(`Published package.json would be:\n${this.pkg.stringified}`)
