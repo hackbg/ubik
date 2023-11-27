@@ -7,6 +7,7 @@ import Patcher from './Patcher.mjs'
 import { resolve, dirname, basename, relative, join, isAbsolute } from 'node:path'
 import { readdirSync, existsSync, writeFileSync, copyFileSync, unlinkSync } from 'node:fs'
 import { mkdirpSync } from 'mkdirp'
+import { rimrafSync } from 'rimraf'
 import fastGlob from 'fast-glob'
 
 export default class Compiler extends Logged {
@@ -100,6 +101,7 @@ export default class Compiler extends Logged {
       if (outputs||sourceMaps||types||typeMaps) {
 
         const tempDir = resolve(this.cwd, '.ubik')
+        rimrafSync(tempDir)
         mkdirpSync(tempDir)
 
         await this.run([this.tsc,
@@ -239,6 +241,7 @@ export default class Compiler extends Logged {
   }
 
   run (...commands) {
+    this.log.debug('Running in', bold(resolve(this.cwd)))
     return runConcurrently({ cwd: this.cwd, commands })
   }
 
