@@ -53,6 +53,36 @@ export default class Compiler extends Logged {
       try { return fn() } catch (e) { this.onError(name)(e) }
     }
 
+    const collect = async (
+      tempDir = Error.required('tempDir') || '',
+      tempExt = Error.required('tempExt') || '',
+      outDir  = Error.required('outDir')  || '',
+      outExt  = Error.required('outExt')  || '',
+    ) => {
+      this.log.log(`Collecting from ${bold(this.toRel(tempDir))}: ${bold(outExt)} -> ${bold(`${tempExt}`)}`)
+      const glob1 = `${tempDir}/*${outExt}`
+      const glob2 = `${tempDir}/**/*${outExt}`
+      const globs = ['!node_modules', '!**/node_modules', glob1, glob2]
+      const inputs = await fastGlob(globs)
+      const outputs = []
+      for (const file of inputs.filter(file=>file.endsWith(outExt))) {
+        const srcFile = resolve(file)
+        const outFile = replaceExtension(
+          join(outDir, relative(tempDir, file)), outExt, tempExt
+        )
+        mkdirpSync(dirname(outFile))
+        if (this.verbose) {
+          this.log.debug(`${this.toRel(srcFile)} -> ${this.toRel(outFile)}`)
+        }
+        copyFileSync(srcFile, outFile)
+        unlinkSync(srcFile)
+        outputs.push(outFile)
+        this.compiled.add(this.toRel(outFile))
+      }
+      //console.log({globs, inputs, outputs})
+      //console.log(await fastGlob(['!node_modules', '!**/node_modules', '*']))
+    }
+
     /** @arg {string} module setting
       * @arg {string} target setting
       *
@@ -69,13 +99,13 @@ export default class Compiler extends Logged {
 
       if (outputs||sourceMaps||types||typeMaps) {
 
-        const outDir = resolve(this.cwd, '.ubik')
-        mkdirpSync(outDir)
+        const tempDir = resolve(this.cwd, '.ubik')
+        mkdirpSync(tempDir)
 
         await this.run([this.tsc,
           '--target', target,
           '--module', module,
-          '--outDir', outDir,
+          '--outDir', tempDir,
           sourceMaps && '--sourceMap',
           types      && '--declaration',
           typeMaps   && '--declarationMap',
@@ -83,55 +113,35 @@ export default class Compiler extends Logged {
 
         if (outputs) {
           revertable(`patch ${outputs}`, ()=>new CodePatcher({
-            cwd:    outDir,
+            cwd:    tempDir,
             dryRun: this.dryRun,
             ext:    outputs,
-            files:  this.pkg.files.filter(x=>x.endsWith(outputs))
+            files:  this.pkg.files.filter(x=>x.endsWith('.js'))
           }).patchAll())
-
-          await revertable(`collect ${outputs}`, ()=>this.collect({
-            name:    outputs,
-            srcDir:  outDir,
-            distDir: this.cwd,
-            srcExt:  '.js',
-            distExt: outputs
-          }))
-
+          await revertable(`collect ${outputs}`, ()=>collect(
+            tempDir, '.js', cwd, outputs
+          ))
           if (sourceMaps) {
-            await revertable(`collect ${sourceMaps}`, ()=>this.collect({
-              name:    sourceMaps,
-              srcDir:  outDir,
-              distDir: this.cwd,
-              srcExt:  '.js.map',
-              distExt: sourceMaps
-            }))
+            await revertable(`collect ${sourceMaps}`, ()=>collect(
+              tempDir, '.js.map', cwd, sourceMaps
+            ))
           }
         }
 
         if (types) {
           revertable(`patch ${types}`, ()=>new TypePatcher({
-            cwd:    outDir,
+            cwd:    tempDir,
             dryRun: this.dryRun,
             ext:    types,
-            files:  this.pkg.files.filter(x=>x.endsWith(types))
+            files:  this.pkg.files.filter(x=>x.endsWith('.d.ts'))
           }).patchAll())
-
-          await revertable(`collect ${outputs}`, ()=>this.collect({
-            name:    outputs,
-            srcDir:  outDir,
-            distDir: this.cwd,
-            srcExt:  '.d.ts',
-            distExt: types
-          }))
-
+          await revertable(`collect ${outputs}`, ()=>collect(
+            tempDir, '.d.ts', cwd, types
+          ))
           if (typeMaps) {
-            await revertable(`collect ${typeMaps}`, ()=>this.collect({
-              name:    sourceMaps,
-              srcDir:  outDir,
-              distDir: this.cwd,
-              srcExt:  '.d.ts.map',
-              distExt: typeMaps
-            }))
+            await revertable(`collect ${typeMaps}`, ()=>collect(
+              tempDir, this.cwd, '.d.ts.map', typeMaps
+            ))
           }
         }
 
@@ -245,37 +255,6 @@ export default class Compiler extends Logged {
 
   toRel (...args) {
     return toRel(this.cwd, ...args)
-  }
-
-  async collect ({
-    name     = Error.required('name')    || '',
-    srcDir   = Error.required('srcDir')  || '',
-    distDir  = Error.required('distDir') || '',
-    srcExt   = Error.required('srcExt')  || '',
-    distExt  = Error.required('distExt') || '',
-  } = {}) {
-    this.log.log(`Collecting from ${bold(this.toRel(distDir))}: ${bold(srcExt)} -> ${bold(`${distExt}`)}`)
-    const glob1 = `${distDir}/*${srcExt}`
-    const glob2 = `${distDir}/**/*${srcExt}`
-    const globs = ['!node_modules', '!**/node_modules', glob1, glob2]
-    const inputs = await fastGlob(globs)
-    const outputs = []
-    for (const file of inputs.filter(file=>file.endsWith(srcExt))) {
-      const srcFile = resolve(file)
-      const newFile = replaceExtension(
-        join(srcDir, relative(distDir, file)), srcExt, distExt
-      )
-      mkdirpSync(dirname(newFile))
-      if (this.verbose) {
-        this.log.debug(`${toRel(this.cwd, srcFile)} -> ${toRel(this.cwd, newFile)}`)
-      }
-      copyFileSync(srcFile, newFile)
-      unlinkSync(srcFile)
-      outputs.push(newFile)
-      this.compiled.add(this.toRel(newFile))
-    }
-    //console.log({globs, inputs, outputs})
-    //console.log(await fastGlob(['!node_modules', '!**/node_modules', '*']))
   }
 
   revert ({ keep = false, compiled = new Set(), } = {}) {
