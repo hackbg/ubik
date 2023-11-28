@@ -6,8 +6,12 @@ import { resolve, relative, dirname } from 'node:path'
 import { readFileSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import fastGlob from 'fast-glob'
-import { console, bold } from './package.mjs'
+import { console, bold, colors } from './package.mjs'
 import * as Ubik from './ubik.mjs'
+console
+  .log(colors.green('█  █ █▀▀▄ █ █ ▄▀ 2022-∞'))
+  .log(colors.green('█  █ █▀▀▄ █ █▀▄  '))
+  .log(colors.green('▀▀▀▀ ▀▀▀  ▀ ▀  ▀ '))
 
 const argv = [...process.argv]
 let interpreter = argv.shift()
