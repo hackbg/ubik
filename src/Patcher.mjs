@@ -178,7 +178,7 @@ export default class Patcher extends Logged {
             if (args.length === 1 && args[0].type === 'Literal') {
               const value = args[0].value
               if (value.startsWith('./') || value.startsWith('../')) {
-                const target = `${resolve(dirname(file), value)}.ts`
+                const target = `${resolve(dirname(file), value)}.js`
                 if (existsSync(target)) {
                   if (!modified) {
                     log.log(`(${index}/${total})`, 'Patching', bold(relative(cwd, file)))
