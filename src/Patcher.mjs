@@ -64,14 +64,6 @@ export default class Patcher extends Logged {
     return this.patched
   }
 
-  static esmDeclarationsToPatch = [
-    'ImportDeclaration',
-    'ExportDeclaration',
-    'ImportAllDeclaration',
-    'ExportAllDeclaration',
-    'ExportNamedDeclaration'
-  ]
-
   static MJS = class MJSPatcher extends Patcher {
 
     constructor (options) {
@@ -87,29 +79,60 @@ export default class Patcher extends Logged {
       index  = 0,
       total  = 0,
     }) {
+      const { cwd, log, patchExt } = this
       file = resolve(this.cwd, file)
       let modified = false
-      //@ts-ignore
-      const { body } = ast
-      for (const declaration of body) {
-        if (!Patcher.esmDeclarationsToPatch.includes(declaration.type) || !declaration.source?.value) continue
-        const oldValue = declaration.source.value
-        const isRelative = oldValue.startsWith('./') || oldValue.startsWith('../')
-        const isNotPatched = !oldValue.endsWith(this.patchExt)
-        if (isRelative && isNotPatched) {
-          if (!modified) {
-            this.log.log(`(${index}/${total})`, 'Patching', bold(relative(this.cwd, file)))
+
+      const patchDeclaration = node => {
+        //@ts-ignore
+        const { type, source } = node
+        if (source?.value) {
+          const isRelative = source.value.startsWith('./') || source.value.startsWith('../')
+          const isNotPatched = !source.value.endsWith(patchExt)
+          if (isRelative && isNotPatched) {
+            if (!modified) {
+              log.log(`(${index}/${total})`, 'Patching', bold(relative(cwd, file)))
+            }
+            const newValue = `${source.value}${patchExt}`
+            log.debug(' ', source.value, '->', newValue)
+            Object.assign(source, { value: newValue, raw: JSON.stringify(newValue) })
+            modified = true
           }
-          const newValue = `${oldValue}${this.patchExt}`
-          this.log.debug(' ', oldValue, '->', newValue)
-          Object.assign(declaration.source, { value: newValue, raw: JSON.stringify(newValue) })
-          modified = true
         }
       }
+
+      const patchExpression = node => {
+        //@ts-ignore
+        const { source, loc: { start: { line, column } } } = node
+        const { value } = source
+        if (value.startsWith('./') || value.startsWith('../')) {
+          source.value = `${value}${patchExt}`
+          source.raw = JSON.stringify(source.value)
+          log.debug(`  import("${value}") -> import("${source.value}")`)
+        }
+      }
+
+      acornWalk.simple(ast, {
+        ImportDeclaration:      patchDeclaration,
+        ExportDeclaration:      patchDeclaration,
+        ImportAllDeclaration:   patchDeclaration,
+        ExportAllDeclaration:   patchDeclaration,
+        ExportNamedDeclaration: patchDeclaration,
+        ImportExpression:       patchExpression
+      })
+
       return this.savePatched(modified, file, astring.generate(ast))
     }
 
   }
+
+  static esmDeclarationsToPatch = [
+    'ImportDeclaration',
+    'ExportDeclaration',
+    'ImportAllDeclaration',
+    'ExportAllDeclaration',
+    'ExportNamedDeclaration'
+  ]
 
   static MTS = class MTSPatcher extends Patcher {
 
@@ -122,13 +145,13 @@ export default class Patcher extends Logged {
     patch ({
       file   = Error.required('file'),
       source = readFileSync(resolve(this.cwd, file), 'utf8'),
-      parsed = recast.parse(source, { parser: recastTS }),
+      ast    = recast.parse(source, { parser: recastTS }),
       index  = 0,
       total  = 0,
     }) {
       file = resolve(this.cwd, file)
       let modified = false
-      for (const declaration of parsed.program.body) {
+      for (const declaration of ast.program.body) {
         if (!Patcher.esmDeclarationsToPatch.includes(declaration.type) || !declaration.source?.value) continue
         const oldValue = declaration.source.value
         const isRelative = oldValue.startsWith('./') || oldValue.startsWith('../')
@@ -143,7 +166,7 @@ export default class Patcher extends Logged {
           modified = true
         }
       }
-      return this.savePatched(modified, file, recast.print(parsed).code)
+      return this.savePatched(modified, file, recast.print(ast).code)
     }
 
   }
@@ -175,7 +198,7 @@ export default class Patcher extends Logged {
             type === 'Identifier' &&
             name === 'require' // GOTCHA: if "require" is renamed to something else, idk
           ) {
-            if (args.length === 1 && args[0].type === 'Literal') {
+            if (args[0]?.type === 'Literal') {
               const value = args[0].value
               if (value.startsWith('./') || value.startsWith('../')) {
                 const target = `${resolve(dirname(file), value)}.js`
