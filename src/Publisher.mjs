@@ -267,22 +267,33 @@ export class Compiler extends Logged {
     this.pkg.exports = {
       ...this.pkg.exports, '.': { ...this.pkg.exports['.'] || {}, 'source': this.toRel(this.pkg.main) }
     }
-    if (this.pkg.type === 'module') {
-      await this.emitESM()
-      this.pkg.types = replaceExtension(this.pkg.main, '.ts', this.emit.esm.types||'.dist.d.ts')
-      this.pkg.main = this.toRel(replaceExtension(this.pkg.main, '.ts', this.emit?.esm?.outputs||'.dist.js'))
-    } else {
-      await this.emitCJS()
-      this.pkg.types = replaceExtension(this.pkg.main, '.ts', this.emit.cjs.types||'.dist.d.ts')
-      this.pkg.main = this.toRel(replaceExtension(this.pkg.main, '.ts', this.emit?.cjs?.outputs||'.dist.js'))
-    }
     if (this.pkg.browser) {
-      const ext = ((this.pkg.type === 'module') ? this.emit?.esm?.outputs : this.emit?.cjs?.outputs)
+      const ext = ((this.pkg.type === 'module')
+        ? this.emit?.esm?.outputs
+        : this.emit?.cjs?.outputs)
       const browser = this.toRel(replaceExtension(this.pkg.browser, '.ts', ext || '.dist.js'))
       this.pkg.exports = {
         ...this.pkg.exports, '.': { ...this.pkg.exports['.'], 'browser': browser }
       }
       this.pkg.browser = browser
+    }
+    if (this.pkg.type !== 'module') {
+      await this.emitCJS()
+      this.pkg.types = this.toRel(
+        replaceExtension(this.pkg.main, '.ts', this.emit?.cjs?.types||'.dist.d.ts')
+      )
+      this.pkg.main = this.toRel(
+        replaceExtension(this.pkg.main, '.ts', this.emit?.cjs?.outputs||'.dist.js')
+      )
+    } else {
+      // 'default' key must go last, see https://stackoverflow.com/a/76127619 *asplode*
+      await this.emitESM()
+      this.pkg.types = this.toRel(
+        replaceExtension(this.pkg.main, '.ts', this.emit?.esm?.types||'.dist.d.ts')
+      )
+      this.pkg.main = this.toRel(
+        replaceExtension(this.pkg.main, '.ts', this.emit?.esm?.outputs||'.dist.js')
+      )
     }
     this.pkg.files = [
       ...this.pkg.files,
