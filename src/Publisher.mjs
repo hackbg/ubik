@@ -313,10 +313,10 @@ export class Compiler extends Logged {
         ...this.pkg.exports, '.': { ...this.pkg.exports['.'], 'default': esmMain }
       }
       if (this.pkg.type === 'module') {
-        this.pkg.main = esmMain
         if (types) {
           this.pkg.types = replaceExtension(this.pkg.main, '.ts', types)
         }
+        this.pkg.main = esmMain
       }
     }
   }
@@ -338,10 +338,10 @@ export class Compiler extends Logged {
         ...this.pkg.exports, '.': { ...this.pkg.exports['.'], 'require': cjsMain }
       }
       if (!(this.pkg.type === 'module')) {
-        this.pkg.main = cjsMain
         if (types) {
           this.pkg.types = replaceExtension(this.pkg.main, '.ts', types)
         }
+        this.pkg.main = cjsMain
       }
     }
   }
