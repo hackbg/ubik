@@ -76,7 +76,7 @@ export default class Patcher extends Logged {
 
     constructor (options) {
       options.matchExt ??= '.js'
-      options.patchExt ??= '.dist.mjs'
+      options.patchExt ??= '.dist.js'
       super(options)
     }
 
@@ -115,7 +115,7 @@ export default class Patcher extends Logged {
 
     constructor (options) {
       options.matchExt ??= '.d.ts'
-      options.patchExt ??= '.dist.mts'
+      options.patchExt ??= '.dist.d.ts'
       super(options)
     }
 
@@ -152,7 +152,7 @@ export default class Patcher extends Logged {
 
     constructor (options) {
       options.matchExt ??= '.js'
-      options.patchExt ??= '.dist.cjs'
+      options.patchExt ??= '.dist.js'
       super(options)
     }
 
@@ -214,7 +214,7 @@ export default class Patcher extends Logged {
 
     constructor (options) {
       options.matchExt ??= '.d.ts'
-      options.patchExt ??= '.dist.cts'
+      options.patchExt ??= '.dist.d.ts'
       super(options)
     }
 
