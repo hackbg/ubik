@@ -467,15 +467,16 @@ export class Compiler extends Logged {
     }
     this.log.br().log('Reverting modifications...')
     if (!existsSync(join(this.cwd, 'package.json.bak'))) {
-      this.log.br().warn("Backup file package.json.bak not found")
+      this.log.warn("Backup file package.json.bak not found")
     } else {
-      this.log.br().log("Restoring original package.json")
+      this.log.log("Restoring original package.json")
       unlinkSync(join(this.cwd, 'package.json'))
       copyFileSync(join(this.cwd, 'package.json.bak'), join(this.cwd, 'package.json'))
       unlinkSync(join(this.cwd, 'package.json.bak'))
     }
-    this.log.br().log('Deleting generated files...')
+    this.log.log('Deleting generated files...')
     for (const file of this.generated) {
+      this.log.debug('Deleting', file)
       unlinkSync(file)
     }
     return true
