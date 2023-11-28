@@ -465,7 +465,7 @@ export class Compiler extends Logged {
       unlinkSync(join(this.cwd, 'package.json.bak'))
     }
     this.log.log('Deleting generated files...')
-    for (const file of this.generated) {
+    for (const file of [...this.generated].sort()) {
       this.log.debug('Deleting', file)
       unlinkSync(file)
     }
