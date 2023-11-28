@@ -19,26 +19,37 @@ const console = new Console('@hackbg/ubik')
 export default class Patcher extends Logged {
 
   constructor ({
-    cwd    = process.cwd(),
+    cwd = process.cwd(),
     dryRun = true,
+    matchExt = Error.required('matchExt'),
+    patchExt = Error.required('patchExt'),
   }) {
     super()
-    this.cwd     = cwd
-    this.dryRun  = dryRun
+    this.cwd = cwd
+    this.dryRun = dryRun
+    this.matchExt = matchExt
+    this.patchExt = patchExt
   }
 
   patched = {}
 
   async patchAll (ext) {
-    const files = await fastGlob([`${this.cwd}/*${ext}`, `${this.cwd}/**/*${ext}`])
+    const files = await fastGlob([
+      `${this.cwd}/*${this.matchExt}`,
+      `${this.cwd}/**/*${this.matchExt}`
+    ])
     this.log.log(`Patching ${files.length} files`)
     for (let i = 0; i < files.length; i++) {
-      this.patch({ ext, file: files[i], index: i+1, total: files.length })
+      this.patch({
+        file:  files[i],
+        index: i+1,
+        total: files.length
+      })
     }
     return this.patched
   }
 
-  patch ({ ext, file, index, total }) {
+  patch ({ file, index, total }) {
     throw new Error('abstract')
     return this.patched
   }
@@ -62,13 +73,19 @@ export default class Patcher extends Logged {
   ]
 
   static MJS = class MJSPatcher extends Patcher {
+
+    constructor (options) {
+      options.matchExt ??= '.js'
+      options.patchExt ??= '.dist.mjs'
+      super(options)
+    }
+
     patch ({
-      ext,
-      file    = Error.required('file'),
-      source  = readFileSync(resolve(this.cwd, file), 'utf8'),
-      ast     = acornParse(file, source),
-      index   = 0,
-      total   = 0,
+      file   = Error.required('file'),
+      source = readFileSync(resolve(this.cwd, file), 'utf8'),
+      ast    = acornParse(file, source),
+      index  = 0,
+      total  = 0,
     }) {
       file = resolve(this.cwd, file)
       let modified = false
@@ -78,12 +95,12 @@ export default class Patcher extends Logged {
         if (!Patcher.esmDeclarationsToPatch.includes(declaration.type) || !declaration.source?.value) continue
         const oldValue = declaration.source.value
         const isRelative = oldValue.startsWith('./') || oldValue.startsWith('../')
-        const isNotPatched = !oldValue.endsWith(ext)
+        const isNotPatched = !oldValue.endsWith(this.patchExt)
         if (isRelative && isNotPatched) {
           if (!modified) {
             this.log.log(`(${index}/${total})`, 'Patching', bold(relative(this.cwd, file)))
           }
-          const newValue = `${oldValue}${ext}`
+          const newValue = `${oldValue}${this.patchExt}`
           this.log.debug(' ', oldValue, '->', newValue)
           Object.assign(declaration.source, { value: newValue, raw: JSON.stringify(newValue) })
           modified = true
@@ -91,16 +108,23 @@ export default class Patcher extends Logged {
       }
       return this.savePatched(modified, file, astring.generate(ast))
     }
+
   }
 
   static MTS = class MTSPatcher extends Patcher {
+
+    constructor (options) {
+      options.matchExt ??= '.d.ts'
+      options.patchExt ??= '.dist.mts'
+      super(options)
+    }
+
     patch ({
-      ext,
-      file    = Error.required('file'),
-      source  = readFileSync(resolve(this.cwd, file), 'utf8'),
-      parsed  = recast.parse(source, { parser: recastTS }),
-      index   = 0,
-      total   = 0,
+      file   = Error.required('file'),
+      source = readFileSync(resolve(this.cwd, file), 'utf8'),
+      parsed = recast.parse(source, { parser: recastTS }),
+      index  = 0,
+      total  = 0,
     }) {
       file = resolve(this.cwd, file)
       let modified = false
@@ -108,7 +132,7 @@ export default class Patcher extends Logged {
         if (!Patcher.esmDeclarationsToPatch.includes(declaration.type) || !declaration.source?.value) continue
         const oldValue = declaration.source.value
         const isRelative = oldValue.startsWith('./') || oldValue.startsWith('../')
-        const isNotPatched = !oldValue.endsWith(ext)
+        const isNotPatched = !oldValue.endsWith('.dist')
         if (isRelative && isNotPatched) {
           if (!modified) {
             this.log.log(`(${index}/${total})`, 'Patching', bold(relative(this.cwd, file)))
@@ -121,16 +145,23 @@ export default class Patcher extends Logged {
       }
       return this.savePatched(modified, file, recast.print(parsed).code)
     }
+
   }
 
   static CJS = class CJSPatcher extends Patcher {
+
+    constructor (options) {
+      options.matchExt ??= '.js'
+      options.patchExt ??= '.dist.cjs'
+      super(options)
+    }
+
     patch ({
-      ext,
-      file    = Error.required('file'),
-      source  = readFileSync(resolve(this.cwd, file), 'utf8'),
-      ast     = acornParse(file, source),
-      index   = 0,
-      total   = 0,
+      file   = Error.required('file'),
+      source = readFileSync(resolve(this.cwd, file), 'utf8'),
+      ast    = acornParse(file, source),
+      index  = 0,
+      total  = 0,
     }) {
       const { cwd, log } = this
       file = resolve(cwd, file)
@@ -152,7 +183,7 @@ export default class Patcher extends Logged {
                   if (!modified) {
                     log.log(`(${index}/${total})`, 'Patching', bold(relative(cwd, file)))
                   }
-                  const newValue = `${value}${ext}`
+                  const newValue = `${value}${this.patchExt}`
                   log.debug(`  require("${value}") -> require("${newValue}")`)
                   args[0].value = newValue
                   args[0].raw = JSON.stringify(newValue)
@@ -176,13 +207,22 @@ export default class Patcher extends Logged {
       })
       return this.savePatched(modified, file, astring.generate(ast))
     }
+
   }
 
   static CTS = class CTSPatcher extends Patcher {
+
+    constructor (options) {
+      options.matchExt ??= '.d.ts'
+      options.patchExt ??= '.dist.cts'
+      super(options)
+    }
+
     patch (args) {
       throw new Error('unimplemented')
       return this.patched
     }
+
   }
 
 }

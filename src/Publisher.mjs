@@ -258,204 +258,186 @@ export class Compiler extends Logged {
   }
 
   async compileAndPatch () {
-    const { cwd, pkg } = this
-
-    pkg.ubik = true
-
-    const revertable = (name, fn) => {
-      try { return fn() } catch (e) { this.onError(name)(e) }
-    }
-
-    /** @arg {string} module setting
-      * @arg {string} target setting
-      *
-      * @arg {string} outputs    extension
-      * @arg {string} sourceMaps extension
-      * @arg {string} types      extension
-      * @arg {string} typeMaps   extension
-      *
-      * @arg {typeof Patcher} CodePatcher implementation
-      * @art {typeof Patcher} TypePatcher implementation */
-    const emitPatched = async (
-      module, target, outputs, sourceMaps, types, typeMaps, CodePatcher, TypePatcher
-    ) => {
-
-      if (outputs||sourceMaps||types||typeMaps) {
-
-        const tempDir = resolve(this.cwd, '.ubik')
-        rimrafSync(tempDir)
-        mkdirpSync(tempDir)
-
-        await this.run([this.tsc,
-          '--target', target,
-          '--module', module,
-          '--outDir', tempDir,
-          sourceMaps && '--sourceMap',
-          types      && '--declaration',
-          typeMaps   && '--declarationMap',
-        ].join(' '))
-
-        if (outputs) {
-
-          await revertable(`patch ${outputs}`, ()=>new CodePatcher({
-            cwd: tempDir, dryRun: this.dryRun,
-          }).patchAll(outputs))
-
-          await revertable(`collect ${outputs}`, ()=>collect(
-            tempDir, '.js', cwd, outputs
-          ))
-
-          if (sourceMaps) {
-            await revertable(`collect ${sourceMaps}`, ()=>collect(
-              tempDir, '.js.map', cwd, sourceMaps
-            ))
-          }
-
-        }
-
-        if (types) {
-
-          await revertable(`patch ${types}`, ()=>new TypePatcher({
-            cwd: tempDir, dryRun: this.dryRun,
-          }).patchAll(types))
-
-          await revertable(`collect ${outputs}`, ()=>collect(
-            tempDir, '.d.ts', cwd, types
-          ))
-
-          if (typeMaps) {
-            await revertable(`collect ${typeMaps}`, ()=>collect(
-              tempDir, '.d.ts.map', cwd, typeMaps
-            ))
-          }
-
-        }
-
-        rimrafSync(tempDir)
-
-      }
-
-    }
-
-    const collect = async (
-      tempDir = Error.required('tempDir') || '',
-      tempExt = Error.required('tempExt') || '',
-      outDir  = Error.required('outDir')  || '',
-      outExt  = Error.required('outExt')  || '',
-    ) => {
-      this.log.debug(`Collecting from ${bold(this.toRel(tempDir))}: ${bold(tempExt)} -> ${bold(`${outExt}`)}`)
-      const glob1 = `${tempDir}/*${tempExt}`
-      const glob2 = `${tempDir}/**/*${tempExt}`
-      const globs = ['!node_modules', '!**/node_modules', glob1, glob2]
-      const inputs = await fastGlob(globs)
-      const outputs = []
-      for (const file of inputs.filter(file=>file.endsWith(tempExt))) {
-        const srcFile = resolve(file)
-        const outFile = replaceExtension(
-          join(outDir, relative(tempDir, file)), tempExt, outExt
-        )
-        mkdirpSync(dirname(outFile))
-        if (this.verbose) {
-          this.log.debug(`${this.toRel(srcFile)} -> ${this.toRel(outFile)}`)
-        }
-        copyFileSync(srcFile, outFile)
-        unlinkSync(srcFile)
-        outputs.push(outFile)
-        this.generated.add(this.toRel(outFile))
-      }
-      //console.log({globs, inputs, outputs})
-      //console.log(await fastGlob(['!node_modules', '!**/node_modules', '.ubik/*']))
-    }
-
-    if (!pkg.main) {
+    this.pkg.ubik = true
+    if (!this.pkg.main) {
       this.log.warn('No "main" in package.json, defaulting to index.ts')
-      pkg.main = 'index.ts'
+      this.pkg.main = 'index.ts'
     }
-
-    pkg.exports ??= {}
-
-    pkg.exports = { ...pkg.exports, '.': pkg.exports['.'] ?? {} }
-
-    const main = pkg.main
-    pkg.exports = { ...pkg.exports, '.': { ...pkg.exports['.'], 'source': this.toRel(main) } }
-
+    this.pkg.exports ||= {}
+    this.pkg.exports = { ...this.pkg.exports, '.': {
+      ...this.pkg.exports['.'] || {}, 'source': this.toRel(this.pkg.main)
+    } }
     if (this.emit?.esm) {
-      const {
-        module = process.env.UBIK_ESM_MODULE || 'esnext',
-        target = process.env.UBIK_ESM_TARGET || 'esnext',
-        outputs    = '.dist.mjs',
-        sourceMaps = outputs && '.dist.mjs.map',
-        types      = outputs && '.dist.d.mts',
-        typeMaps   = types && '.dist.d.mts.map',
-      } = this.emit.esm
-      await emitPatched(
-        module, target, outputs, sourceMaps, types, typeMaps, Patcher.MJS, Patcher.MTS
-      )
-      if (outputs) {
-
-        const esmMain = this.toRel(replaceExtension(main, '.ts', outputs))
-        pkg.exports = { ...pkg.exports, '.': { ...pkg.exports['.'], 'default': esmMain } }
-
-        if (pkg.browser) {
-          const esmBrowser = this.toRel(replaceExtension(pkg.browser, '.ts', outputs))
-          this.log.info('Handling alternate "browser" entrypoint for ESM only.')
-          pkg.exports = { ...pkg.exports, '.': { ...pkg.exports['.'], 'browser': esmBrowser } }
-          pkg.browser = esmBrowser
-          this.log.log(`browser = ${esmBrowser}`)
-        }
-
-        if (pkg.type === 'module') {
-          pkg.main = esmMain
-          if (types) {
-            pkg.types = replaceExtension(main, '.ts', types)
-          }
-        }
-      }
+      await this.emitESM()
     }
-
     if (this.emit?.cjs) {
-      const {
-        module = process.env.UBIK_CJS_MODULE || 'commonjs',
-        target = process.env.UBIK_CJS_TARGET || 'esnext',
-        outputs    = '.dist.cjs',
-        sourceMaps = outputs && '.dist.cjs.map',
-        types      = outputs && '.dist.d.cts',
-        typeMaps   = types && '.dist.d.cts.map',
-      } = this.emit.cjs
-      await emitPatched(
-        module, target, outputs, sourceMaps, types, typeMaps, Patcher.CJS, Patcher.CTS
-      )
-      if (outputs) {
-        const cjsMain = this.toRel(replaceExtension(main, '.ts', outputs))
-        pkg.exports['.']['require'] = cjsMain
-        this.log.log(`exports["."]["require"] = ${pkg.exports['.']['require']}`)
-
-        if (!(pkg.type === 'module')) {
-          pkg.main = cjsMain
-          if (types) {
-            pkg.types = replaceExtension(main, '.ts', types)
-          }
-        }
-      }
-
+      await this.emitCJS()
     }
-
-    pkg.files = [ ...pkg.files, ...this.generated ]
-
+    if (this.pkg.browser) {
+      const ext = ((this.pkg.type === 'module') ? this.emit?.esm?.outputs : this.emit?.cjs?.outputs)
+      const browser = this.toRel(replaceExtension(this.pkg.browser, '.ts', ext || '.ts'))
+      this.pkg.exports = {
+        ...this.pkg.exports, '.': { ...this.pkg.exports['.'], 'browser': browser }
+      }
+      this.pkg.browser = browser
+      this.log.log(`browser = ${browser}`)
+    }
+    this.pkg.files = [
+      ...this.pkg.files,
+      ...this.generated // FIXME: return from emit fns instead
+    ]
     if (this.dryRun) {
-      this.log.br().info(`Published package.json would be:\n${this.pkg.stringified}`)
+      this.log.br().info(`Patched package.json:\n${this.pkg.stringified}`)
     } else {
       this.log.log("Backing up package.json to package.json.bak")
       copyFileSync(join(this.cwd, 'package.json'), join(this.cwd, 'package.json.bak'))
       writeFileSync(join(this.cwd, 'package.json'), this.pkg.stringified, 'utf8')
     }
-
     return this.generated
+  }
+
+  async emitESM ({
+    module = process.env.UBIK_ESM_MODULE || 'esnext',
+    target = process.env.UBIK_ESM_TARGET || 'esnext',
+    outputs    = '.dist.mjs',
+    sourceMaps = outputs && '.dist.mjs.map',
+    types      = outputs && '.dist.d.mts',
+    typeMaps   = types && '.dist.d.mts.map',
+  } = this.emit.esm || Error.required('ESM emit config')) {
+    await this.emitPatched(
+      module, target, outputs, sourceMaps, types, typeMaps, Patcher.MJS, Patcher.MTS
+    )
+    if (outputs) {
+      const esmMain = this.toRel(replaceExtension(this.pkg.main, '.ts', outputs))
+      this.pkg.exports = {
+        ...this.pkg.exports, '.': { ...this.pkg.exports['.'], 'default': esmMain }
+      }
+      if (this.pkg.type === 'module') {
+        this.pkg.main = esmMain
+        if (types) {
+          this.pkg.types = replaceExtension(this.pkg.main, '.ts', types)
+        }
+      }
+    }
+  }
+
+  async emitCJS ({
+    module = process.env.UBIK_CJS_MODULE || 'commonjs',
+    target = process.env.UBIK_CJS_TARGET || 'esnext',
+    outputs    = '.dist.cjs',
+    sourceMaps = outputs && '.dist.cjs.map',
+    types      = outputs && '.dist.d.cts',
+    typeMaps   = types && '.dist.d.cts.map',
+  } = this.emit.cjs || Error.required('CJS emit config')) {
+    await this.emitPatched(
+      module, target, outputs, sourceMaps, types, typeMaps, Patcher.CJS, Patcher.CTS
+    )
+    if (outputs) {
+      const cjsMain = this.toRel(replaceExtension(this.pkg.main, '.ts', outputs))
+      this.pkg.exports = {
+        ...this.pkg.exports, '.': { ...this.pkg.exports['.'], 'require': cjsMain }
+      }
+      if (!(this.pkg.type === 'module')) {
+        this.pkg.main = cjsMain
+        if (types) {
+          this.pkg.types = replaceExtension(this.pkg.main, '.ts', types)
+        }
+      }
+    }
+  }
+
+  /** @arg {string} module setting
+    * @arg {string} target setting
+    *
+    * @arg {string} outputs    extension
+    * @arg {string} sourceMaps extension
+    * @arg {string} types      extension
+    * @arg {string} typeMaps   extension
+    *
+    * @arg {typeof Patcher} CodePatcher implementation
+    * @art {typeof Patcher} TypePatcher implementation */
+  async emitPatched (
+    module, target, outputs, sourceMaps, types, typeMaps, CodePatcher, TypePatcher
+  ) {
+    const dryRun = this.dryRun
+    const out = this.cwd
+    const cwd = resolve(this.cwd, '.ubik')
+    if (outputs||sourceMaps||types||typeMaps) {
+      rimrafSync(cwd)
+      mkdirpSync(cwd)
+      await this.run([this.tsc,
+        '--target', target,
+        '--module', module,
+        '--outDir', cwd,
+        sourceMaps && '--sourceMap',
+        types      && '--declaration',
+        typeMaps   && '--declarationMap',
+      ].join(' '))
+      if (outputs) {
+        await this.revertable(`patch ${outputs}`,
+          ()=>new CodePatcher({cwd, dryRun}).patchAll(outputs))
+        await this.revertable(`collect ${outputs}`,
+          ()=>this.collect(cwd, '.js', out, outputs))
+        if (sourceMaps) {
+          await this.revertable(`collect ${sourceMaps}`,
+            ()=>this.collect(cwd, '.js.map', out, sourceMaps))
+        }
+      }
+      if (types) {
+        await this.revertable(`patch ${types}`,
+          ()=>new TypePatcher({cwd, dryRun}).patchAll(types))
+        await this.revertable(`collect ${outputs}`,
+          ()=>this.collect(cwd, '.d.ts', out, types))
+        if (typeMaps) {
+          await this.revertable(`collect ${typeMaps}`,
+            ()=>this.collect(cwd, '.d.ts.map', out, typeMaps))
+        }
+      }
+      rimrafSync(cwd)
+    }
+  }
+
+  async collect (
+    tempDir = Error.required('tempDir') || '',
+    tempExt = Error.required('tempExt') || '',
+    outDir  = Error.required('outDir')  || '',
+    outExt  = Error.required('outExt')  || '',
+  ) {
+    this.log.debug(`Collecting from ${bold(this.toRel(tempDir))}: ${bold(tempExt)} -> ${bold(`${outExt}`)}`)
+    const glob1 = `${tempDir}/*${tempExt}`
+    const glob2 = `${tempDir}/**/*${tempExt}`
+    const globs = ['!node_modules', '!**/node_modules', glob1, glob2]
+    const inputs = await fastGlob(globs)
+    const outputs = []
+    for (const file of inputs.filter(file=>file.endsWith(tempExt))) {
+      const srcFile = resolve(file)
+      const outFile = replaceExtension(
+        join(outDir, relative(tempDir, file)), tempExt, outExt
+      )
+      mkdirpSync(dirname(outFile))
+      if (this.verbose) {
+        this.log.debug(`${this.toRel(srcFile)} -> ${this.toRel(outFile)}`)
+      }
+      copyFileSync(srcFile, outFile)
+      unlinkSync(srcFile)
+      outputs.push(outFile)
+      this.generated.add(this.toRel(outFile))
+    }
+    //console.log({globs, inputs, outputs})
+    //console.log(await fastGlob(['!node_modules', '!**/node_modules', '.ubik/*']))
   }
 
   run (...commands) {
     this.log.debug('Running in', bold(resolve(this.cwd)))
     return runConcurrently({ cwd: this.cwd, commands })
+  }
+
+  toRel (...args) {
+    return toRel(this.cwd, ...args)
+  }
+
+  revertable (name, fn) {
+    try { return fn() } catch (e) { this.onError(name)(e) }
   }
 
   onError (source) {
@@ -467,10 +449,6 @@ export class Compiler extends Logged {
       this.revert()
       throw e
     }
-  }
-
-  toRel (...args) {
-    return toRel(this.cwd, ...args)
   }
 
   revert () {
