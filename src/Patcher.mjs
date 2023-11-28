@@ -218,9 +218,17 @@ export default class Patcher extends Logged {
       super(options)
     }
 
-    patch (args) {
-      throw new Error('unimplemented')
-      return this.patched
+    patch ({
+      file   = Error.required('file'),
+      source = readFileSync(resolve(this.cwd, file), 'utf8'),
+      ast    = null,//acornParse(file, source),
+      index  = 0,
+      total  = 0,
+    }) {
+      this.log.warn('not implemented', file)
+      const { cwd, log } = this
+      file = resolve(cwd, file)
+      return this.savePatched(false, file, source)
     }
 
   }

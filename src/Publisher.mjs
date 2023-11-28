@@ -403,7 +403,9 @@ export class Compiler extends Logged {
     outDir  = Error.required('outDir')  || '',
     outExt  = Error.required('outExt')  || '',
   ) {
-    this.log.debug(`Collecting from ${bold(this.toRel(tempDir))}: ${bold(tempExt)} -> ${bold(`${outExt}`)}`)
+    this.log.debug(
+      `Collecting from ${bold(this.toRel(tempDir))}: ${bold(tempExt)} -> ${bold(`${outExt}`)}`
+    )
     const glob1 = `${tempDir}/*${tempExt}`
     const glob2 = `${tempDir}/**/*${tempExt}`
     const globs = ['!node_modules', '!**/node_modules', glob1, glob2]
