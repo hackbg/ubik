@@ -269,16 +269,12 @@ export class Compiler extends Logged {
     }
     if (this.pkg.type === 'module') {
       await this.emitESM()
-      if (this.emit?.esm?.types) {
-        this.pkg.types = replaceExtension(this.pkg.main, '.ts', this.emit.esm.types)
-      }
-      this.pkg.main = this.toRel(replaceExtension(this.pkg.main, '.ts', this.emit?.esm?.outputs))
+      this.pkg.types = replaceExtension(this.pkg.main, '.ts', this.emit.esm.types||'.dist.d.ts')
+      this.pkg.main = this.toRel(replaceExtension(this.pkg.main, '.ts', this.emit?.esm?.outputs||'.dist.js'))
     } else {
       await this.emitCJS()
-      if (this.emit?.cjs?.types) {
-        this.pkg.types = replaceExtension(this.pkg.main, '.ts', this.emit.cjs.types)
-      }
-      this.pkg.main = this.toRel(replaceExtension(this.pkg.main, '.ts', this.emit?.cjs?.outputs))
+      this.pkg.types = replaceExtension(this.pkg.main, '.ts', this.emit.cjs.types||'.dist.d.ts')
+      this.pkg.main = this.toRel(replaceExtension(this.pkg.main, '.ts', this.emit?.cjs?.outputs||'.dist.js'))
     }
     if (this.pkg.browser) {
       const ext = ((this.pkg.type === 'module') ? this.emit?.esm?.outputs : this.emit?.cjs?.outputs)
