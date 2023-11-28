@@ -1,47 +1,49 @@
 lockfileVersion: '6.0'
 
-dependencies:
-  '@babel/parser':
-    specifier: ^7.22.10
-    version: 7.22.10
-  '@hackbg/logs':
-    specifier: ^2.0.8
-    version: 2.0.8
-  acorn:
-    specifier: ^8.10.0
-    version: 8.10.0
-  acorn-walk:
-    specifier: ^8.2.0
-    version: 8.2.0
-  astring:
-    specifier: ^1.8.6
-    version: 1.8.6
-  fast-glob:
-    specifier: ^3.3.1
-    version: 3.3.1
-  mkdirp:
-    specifier: ^3.0.1
-    version: 3.0.1
-  node-fetch:
-    specifier: ^3.3.2
-    version: 3.3.2
-  recast:
-    specifier: ^0.23.4
-    version: 0.23.4
-  rimraf:
-    specifier: ^5.0.1
-    version: 5.0.1
+importers:
 
-devDependencies:
-  '@types/node':
-    specifier: ^20
-    version: 20.0.0
-  c8:
-    specifier: ^8.0.1
-    version: 8.0.1
-  typescript:
-    specifier: ^5.2.2
-    version: 5.2.2
+  .:
+    dependencies:
+      '@babel/parser':
+        specifier: ^7.22.10
+        version: 7.22.10
+      '@hackbg/logs':
+        specifier: ^2.1.0
+        version: 2.1.0
+      acorn:
+        specifier: ^8.10.0
+        version: 8.10.0
+      acorn-walk:
+        specifier: ^8.2.0
+        version: 8.2.0
+      astring:
+        specifier: ^1.8.6
+        version: 1.8.6
+      fast-glob:
+        specifier: ^3.3.1
+        version: 3.3.1
+      mkdirp:
+        specifier: ^3.0.1
+        version: 3.0.1
+      node-fetch:
+        specifier: ^3.3.2
+        version: 3.3.2
+      recast:
+        specifier: ^0.23.4
+        version: 0.23.4
+      rimraf:
+        specifier: ^5.0.1
+        version: 5.0.1
+    devDependencies:
+      '@types/node':
+        specifier: ^20
+        version: 20.0.0
+      c8:
+        specifier: ^8.0.1
+        version: 8.0.1
+      typescript:
+        specifier: ^5.2.2
+        version: 5.2.2
 
 packages:
 
@@ -84,8 +86,8 @@ packages:
     resolution: {integrity: sha512-iW54b4gibkZrzwAMsd0Qc3xDb9QwsYvLCNvdHl1EgLfgod0ZLfanjPxwYybfXEqNBAvUZ+w00FTQv4vSvBfp4A==}
     dev: false
 
-  /@hackbg/logs@2.0.8:
-    resolution: {integrity: sha512-bf5hfuUjWgwBdgv5eY9vVPVazYyWKQlvH0KHnlW8qBNYIuPP67/aL7/uIrp39JI8EYvVsPiF9+IoVAj3wp/dJA==}
+  /@hackbg/logs@2.1.0:
+    resolution: {integrity: sha512-+hNvLUiWKE63UGOtak1kX7OmY6uDXj/zg6vqO/9v3ShwDbB2JftEpeSdCrutQLRShNx0UtBSgoRTtHNe/uo8mg==}
     dependencies:
       '@hackbg/allo': 1.0.2
       '@hackbg/hide': 1.0.3
