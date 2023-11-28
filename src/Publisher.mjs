@@ -264,14 +264,21 @@ export class Compiler extends Logged {
       this.pkg.main = 'index.ts'
     }
     this.pkg.exports ||= {}
-    this.pkg.exports = { ...this.pkg.exports, '.': {
-      ...this.pkg.exports['.'] || {}, 'source': this.toRel(this.pkg.main)
-    } }
-    if (this.emit?.esm) {
-      await this.emitESM()
+    this.pkg.exports = {
+      ...this.pkg.exports, '.': { ...this.pkg.exports['.'] || {}, 'source': this.toRel(this.pkg.main) }
     }
-    if (this.emit?.cjs) {
+    if (this.pkg.type === 'module') {
+      await this.emitESM()
+      if (this.emit?.esm?.types) {
+        this.pkg.types = replaceExtension(this.pkg.main, '.ts', this.emit.esm.types)
+      }
+      this.pkg.main = this.toRel(replaceExtension(this.pkg.main, '.ts', this.emit?.esm?.outputs))
+    } else {
       await this.emitCJS()
+      if (this.emit?.cjs?.types) {
+        this.pkg.types = replaceExtension(this.pkg.main, '.ts', this.emit.cjs.types)
+      }
+      this.pkg.main = this.toRel(replaceExtension(this.pkg.main, '.ts', this.emit?.cjs?.outputs))
     }
     if (this.pkg.browser) {
       const ext = ((this.pkg.type === 'module') ? this.emit?.esm?.outputs : this.emit?.cjs?.outputs)
@@ -299,10 +306,10 @@ export class Compiler extends Logged {
   async emitESM ({
     module = process.env.UBIK_ESM_MODULE || 'esnext',
     target = process.env.UBIK_ESM_TARGET || 'esnext',
-    outputs    = '.dist.mjs',
-    sourceMaps = outputs && '.dist.mjs.map',
-    types      = outputs && '.dist.d.mts',
-    typeMaps   = types && '.dist.d.mts.map',
+    outputs    = '.dist.js',
+    sourceMaps = outputs && '.dist.js.map',
+    types      = outputs && '.dist.d.ts',
+    typeMaps   = types && '.dist.d.ts.map',
   } = this.emit.esm || Error.required('ESM emit config')) {
     await this.emitPatched(
       module, target, outputs, sourceMaps, types, typeMaps, Patcher.MJS, Patcher.MTS
@@ -312,22 +319,16 @@ export class Compiler extends Logged {
       this.pkg.exports = {
         ...this.pkg.exports, '.': { ...this.pkg.exports['.'], 'default': esmMain }
       }
-      if (this.pkg.type === 'module') {
-        if (types) {
-          this.pkg.types = replaceExtension(this.pkg.main, '.ts', types)
-        }
-        this.pkg.main = esmMain
-      }
     }
   }
 
   async emitCJS ({
     module = process.env.UBIK_CJS_MODULE || 'commonjs',
     target = process.env.UBIK_CJS_TARGET || 'esnext',
-    outputs    = '.dist.cjs',
-    sourceMaps = outputs && '.dist.cjs.map',
-    types      = outputs && '.dist.d.cts',
-    typeMaps   = types && '.dist.d.cts.map',
+    outputs    = '.dist.js',
+    sourceMaps = outputs && '.dist.js.map',
+    types      = outputs && '.dist.d.ts',
+    typeMaps   = types && '.dist.d.ts.map',
   } = this.emit.cjs || Error.required('CJS emit config')) {
     await this.emitPatched(
       module, target, outputs, sourceMaps, types, typeMaps, Patcher.CJS, Patcher.CTS
@@ -336,12 +337,6 @@ export class Compiler extends Logged {
       const cjsMain = this.toRel(replaceExtension(this.pkg.main, '.ts', outputs))
       this.pkg.exports = {
         ...this.pkg.exports, '.': { ...this.pkg.exports['.'], 'require': cjsMain }
-      }
-      if (!(this.pkg.type === 'module')) {
-        if (types) {
-          this.pkg.types = replaceExtension(this.pkg.main, '.ts', types)
-        }
-        this.pkg.main = cjsMain
       }
     }
   }
