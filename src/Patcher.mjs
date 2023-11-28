@@ -163,7 +163,7 @@ export default class Patcher extends Logged {
       index  = 0,
       total  = 0,
     }) {
-      const { cwd, log } = this
+      const { cwd, log, patchExt } = this
       file = resolve(cwd, file)
       let modified = false
       acornWalk.simple(ast, {
@@ -183,7 +183,7 @@ export default class Patcher extends Logged {
                   if (!modified) {
                     log.log(`(${index}/${total})`, 'Patching', bold(relative(cwd, file)))
                   }
-                  const newValue = `${value}${this.patchExt}`
+                  const newValue = `${value}${patchExt}`
                   log.debug(`  require("${value}") -> require("${newValue}")`)
                   args[0].value = newValue
                   args[0].raw = JSON.stringify(newValue)
