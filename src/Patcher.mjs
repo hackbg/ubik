@@ -40,11 +40,11 @@ export default class Patcher extends Logged {
     ])
     this.log.log(`Patching ${files.length} files`)
     for (let i = 0; i < files.length; i++) {
-      this.patch({
-        file:  files[i],
-        index: i+1,
-        total: files.length
-      })
+      const file = files[i]
+      const index = i + 1
+      const total = files.length
+      this.log(`(${index}/${total})`, 'Patching', bold(relative(this.cwd, file)))
+      this.patch({ index, total, file })
     }
     return this.patched
   }
@@ -82,7 +82,6 @@ export default class Patcher extends Logged {
       const { cwd, log, patchExt } = this
       file = resolve(this.cwd, file)
       let modified = false
-
       const patchDeclaration = node => {
         //@ts-ignore
         const { type, source } = node
@@ -90,9 +89,6 @@ export default class Patcher extends Logged {
           const isRelative = source.value.startsWith('./') || source.value.startsWith('../')
           const isNotPatched = !source.value.endsWith(patchExt)
           if (isRelative && isNotPatched) {
-            if (!modified) {
-              log.log(`(${index}/${total})`, 'Patching', bold(relative(cwd, file)))
-            }
             const newValue = `${source.value}${patchExt}`
             log.debug(' ', source.value, '->', newValue)
             Object.assign(source, { value: newValue, raw: JSON.stringify(newValue) })
@@ -100,7 +96,6 @@ export default class Patcher extends Logged {
           }
         }
       }
-
       const patchExpression = node => {
         //@ts-ignore
         const { source, loc: { start: { line, column } } } = node
@@ -109,9 +104,9 @@ export default class Patcher extends Logged {
           source.value = `${value}${patchExt}`
           source.raw = JSON.stringify(source.value)
           log.debug(`  import("${value}") -> import("${source.value}")`)
+          modified = true
         }
       }
-
       acornWalk.simple(ast, {
         ImportDeclaration:      patchDeclaration,
         ExportDeclaration:      patchDeclaration,
@@ -120,7 +115,6 @@ export default class Patcher extends Logged {
         ExportNamedDeclaration: patchDeclaration,
         ImportExpression:       patchExpression
       })
-
       return this.savePatched(modified, file, astring.generate(ast))
     }
 
@@ -157,9 +151,6 @@ export default class Patcher extends Logged {
         const isRelative = oldValue.startsWith('./') || oldValue.startsWith('../')
         const isNotPatched = !oldValue.endsWith('.dist')
         if (isRelative && isNotPatched) {
-          if (!modified) {
-            this.log.log(`(${index}/${total})`, 'Patching', bold(relative(this.cwd, file)))
-          }
           const newValue = `${oldValue}.dist`
           this.log.debug(' ', oldValue, '->', newValue)
           Object.assign(declaration.source, { value: newValue, raw: JSON.stringify(newValue) })
@@ -203,9 +194,6 @@ export default class Patcher extends Logged {
               if (value.startsWith('./') || value.startsWith('../')) {
                 const target = `${resolve(dirname(file), value)}.js`
                 if (existsSync(target)) {
-                  if (!modified) {
-                    log.log(`(${index}/${total})`, 'Patching', bold(relative(cwd, file)))
-                  }
                   const newValue = `${value}${patchExt}`
                   log.debug(`  require("${value}") -> require("${newValue}")`)
                   args[0].value = newValue
