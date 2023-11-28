@@ -278,12 +278,11 @@ export class Compiler extends Logged {
     }
     if (this.pkg.browser) {
       const ext = ((this.pkg.type === 'module') ? this.emit?.esm?.outputs : this.emit?.cjs?.outputs)
-      const browser = this.toRel(replaceExtension(this.pkg.browser, '.ts', ext || '.ts'))
+      const browser = this.toRel(replaceExtension(this.pkg.browser, '.ts', ext || '.dist.js'))
       this.pkg.exports = {
         ...this.pkg.exports, '.': { ...this.pkg.exports['.'], 'browser': browser }
       }
       this.pkg.browser = browser
-      this.log.log(`browser = ${browser}`)
     }
     this.pkg.files = [
       ...this.pkg.files,
