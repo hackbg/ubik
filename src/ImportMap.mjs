@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process'
 import { relative, resolve, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import * as resolver from 'resolve.exports'
+import Package from './Package.mjs'
 
 import Logged, { bold } from './Logged.mjs'
 import Error from './Error.mjs'
@@ -42,23 +43,28 @@ export default class ImportMap extends Logged {
   }
 
   async add (depth, name, version, deps, scope = this.imports) {
-    this.log.debug('add:', {depth, name, version, deps, scope})
-
     deps = Object.entries(deps || {})
 
     if (deps.length > 0) {
-
-      this.log.log(indent(depth), `deps of ${bold(name||'(unnamed package)')} ${version||'(unspecified version)'}:`)
 
       // For each resolved dependency:
       for (const [name, {version, path, dependencies, imports}] of deps) {
 
         // Load package.json of dependency
         const relpath = relative(process.cwd(), path)
-        const manifest = JSON.parse(readFileSync(join(relpath, 'package.json'), 'utf8'))
-        this.log.log(indent(depth), ` ${bold(name)} (${relpath})`)
-        await this.addMain(depth, { scope, name, relpath, manifest })
-        const { selfRefs } = await this.addExports(depth, { scope, name, relpath, manifest })
+        const pkg = new Package(relpath)//JSON.parse(readFileSync(join(relpath, 'package.json'), 'utf8'))
+        this.log.debug(indent(depth), pkg)
+
+        // Report dependency
+        this.log.log().log(indent(depth), `${bold(name)} ${version} (${relpath})`)
+
+        // Add main entrypoint of dependency
+        await this.addMain(depth, { scope, name, relpath, pkg })
+
+        // What is this
+        const { selfRefs } = await this.addExports(depth, { scope, name, relpath, pkg })
+
+        // What is that
         await this.addImports(depth, { scope, name, relpath, imports })
 
         // Recurse into the dependencies of this dependency:
@@ -76,30 +82,38 @@ export default class ImportMap extends Logged {
     scope    = Error.required('scope')    || '',
     name     = Error.required('name')     || '',
     relpath  = Error.required('relpath')  || '',
-    manifest = Error.required('manifest') || { main: '', module: '', exports: {} }
+    pkg = Error.required('pkg') || { main: '', module: '', exports: {} }
   } = {}) {
-    const { main, module, exports = {} } = manifest
+    const { main, module, exports = {} } = pkg
 
     let resolvedExports = []
     try {
-      resolvedExports = resolver.exports(manifest, manifest.name) || [] // this.conditions
+      resolvedExports = resolver.exports(pkg, pkg.name) || [] // this.conditions
     } catch (e) {
       this.log.warn(e)
     }
 
     let resolvedLegacyEntrypoint
     for (const field of this.legacyEntrypoints) {
-      const resolved = resolver.legacy(manifest, { fields: [field] })
+      const resolved = resolver.legacy(pkg, { fields: [field] })
       if (typeof resolved === 'string') {
         resolvedLegacyEntrypoint = resolved
         break
       }
     }
+    const candidateEntrypoints = [
+      ...resolvedExports,
+      resolvedLegacyEntrypoint,
+      'index.js'
+    ]
+
+    //this.log.debug(indent(depth), name, '=?', candidateEntrypoints)
     
-    const entrypoint = [...resolvedExports, resolvedLegacyEntrypoint].filter(Boolean)[0]
+    const entrypoint = candidateEntrypoints.filter(Boolean)[0]
 
     if (!entrypoint) {
       this.log.warn('No entrypoint found for', bold(name))
+      this.log.debug('package.json of', name, ':', pkg)
       return
     }
 
@@ -119,10 +133,10 @@ export default class ImportMap extends Logged {
     target = `./${target}`
     scope[name] = target
 
-    this.log.log(indent(depth), `  main:`, bold(entrypoint), `-> ${target}`)
+    this.log.log(indent(depth), `*`, bold(entrypoint), `-> ${target}`)
 
     // Extensibility hook
-    await this.patchMain(this, { depth, scope, name, relpath, manifest, entrypoint })
+    await this.patchMain(this, { depth, scope, name, relpath, pkg, entrypoint })
 
   }
 
@@ -131,9 +145,9 @@ export default class ImportMap extends Logged {
     scope    = Error.required('scope')    || '',
     name     = Error.required('name')     || '',
     relpath  = Error.required('relpath')  || '',
-    manifest = Error.required('manifest') || { main: '', module: '', exports: {} }
+    pkg = Error.required('pkg') || { main: '', module: '', exports: {} }
   } = {}) {
-    const { exports = {} } = manifest
+    const { exports = {} } = pkg
     const selfRefs = this.scopes[`/${relpath}/`] ??= {}
     for (const [specifier, entry] of Object.entries(exports)) {
       let target = undefined
@@ -145,14 +159,14 @@ export default class ImportMap extends Logged {
         target = target['default']
       }
       if (target) {
-        this.log.debug(indent(depth), `  export:`, bold(specifier), '->', bold(target))
+        this.log.log(indent(depth), `+`, bold(specifier), '->', bold(target))
         scope[join(name, specifier)] = `./${join(relpath, target)}`
         selfRefs[join(name, specifier)] = `./${join(relpath, target)}`
       } else {
         this.log.warn(indent(depth), `  export:`, bold(specifier), ' - unresolved!', JSON.stringify(entry))
       }
       // Extensibility hook
-      await this.patchExports(this, { depth, scope, name, relpath, manifest, specifier, entry })
+      await this.patchExports(this, { depth, scope, name, relpath, pkg, specifier, entry })
     }
     return { selfRefs }
   }

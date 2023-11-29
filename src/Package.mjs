@@ -5,7 +5,7 @@ import Logged, { bold } from './Logged.mjs'
 import Error from './Error.mjs'
 
 import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { resolve, relative } from 'node:path'
 import { execSync, execFileSync } from 'node:child_process'
 
 export default class NPMPackage extends Logged {
@@ -17,10 +17,11 @@ export default class NPMPackage extends Logged {
     this.cwd = cwd
     this.#json = data
     this.log.label += ' ' + this[Symbol.toStringTag]
+    Object.defineProperty(this, 'cwd', { configurable: true, enumerable: false })
   }
 
   get [Symbol.toStringTag] () {
-    return `${this.name}@${this.version}`
+    return `${this.name}@${this.version} (${relative(process.cwd(), this.cwd)})`
   }
 
   get versionedName () {
@@ -34,6 +35,9 @@ export default class NPMPackage extends Logged {
   }
   get type () {
     return this.#json.type || ''
+  }
+  get module () {
+    return this.#json.module || ''
   }
   get main () {
     return this.#json.main || ''
