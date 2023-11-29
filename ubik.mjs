@@ -12,6 +12,7 @@ export * from './src/Patcher.mjs'
 export { default as Package } from './src/Package.mjs'
 export { Publisher, Compiler } from './src/Publisher.mjs'
 export { default as ImportMap } from './src/ImportMap.mjs'
+export * from './src/ImportMap.mjs'
 
 export function printUsage ({ info } = console) {
   info('Welcome to', bold(`@hackbg/ubik ${Ubik.version}`))

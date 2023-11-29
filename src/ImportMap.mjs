@@ -15,31 +15,6 @@ const indent = x => new Array(x).fill(' ').join('')
 
 export default class ImportMap extends Logged {
 
-  static async fromPNPM ({
-    cwd          = process.cwd(),
-    imports      = {},
-    scopes       = {},
-    pkg          = JSON.parse(runLong(cwd, 'pnpm', 'ls', '--json', '--depth', 'Infinity'))[0],
-    write        = false,
-    patchMain    = (_,__) => {},
-    patchExports = (_,__) => {},
-    patchImports = (_,__) => {},
-  } = {}) {
-    const map = new ImportMap({
-      path: resolve(cwd, 'importmap.json'),
-      imports,
-      scopes,
-      patchMain,
-      patchExports,
-      patchImports,
-    })
-    await map.add(0, pkg.name, pkg.version, pkg.dependencies)
-    if (write) {
-      writeFileSync(map.path, map.stringified)
-    }
-    return map
-  }
-
   constructor ({
     path         = 'importmap.json',
     scopes       = {},
@@ -47,6 +22,7 @@ export default class ImportMap extends Logged {
     patchMain    = (_,__) => {},
     patchExports = (_,__) => {},
     patchImports = (_,__) => {},
+    exportOrder  = ['browser', 'import', 'default']
   } = {}) {
     super()
     this.path         = path
@@ -55,6 +31,7 @@ export default class ImportMap extends Logged {
     this.patchMain    = patchMain
     this.patchExports = patchExports
     this.patchImports = patchImports
+    this.exportOrder  = exportOrder
   }
 
   get stringified () {
@@ -79,6 +56,7 @@ export default class ImportMap extends Logged {
         await this.add(depth + 2, name, version, dependencies ?? {}, selfRefs ?? {})
       }
     }
+    return this
   }
 
   // Rule 01: Add main entrypoint of package.
@@ -160,6 +138,26 @@ export default class ImportMap extends Logged {
         await this.patchImports(this, { depth, scope, name, relpath, imports, specifier, entry })
       }
     }
+  }
+
+}
+
+export class PNPMImportMap extends ImportMap {
+
+  constructor ({
+    write = false,
+    root  = process.cwd(),
+    pkg   = JSON.parse(runLong(root, 'pnpm', 'ls', '--json', '--depth', 'Infinity'))[0],
+    ...options
+  } = {}) {
+    super({ path: resolve(root, 'importmap.json'), ...options })
+    this.ready = this.add(0, pkg.name, pkg.version, pkg.dependencies)
+    this.ready.then(()=>{
+      if (write) {
+        this.log('Writing to', bold(this.path))
+        writeFileSync(this.path, this.stringified)
+      }
+    })
   }
 
 }
