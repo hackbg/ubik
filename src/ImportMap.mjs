@@ -6,6 +6,7 @@ import { readFileSync, writeFileSync, statSync, existsSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { relative, resolve, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import * as resolver from 'resolve.exports'
 
 import Logged, { bold } from './Logged.mjs'
 import Error from './Error.mjs'
@@ -16,22 +17,24 @@ const indent = x => new Array(x).fill(' ').join('')
 export default class ImportMap extends Logged {
 
   constructor ({
-    path         = 'importmap.json',
-    scopes       = {},
-    imports      = {},
-    patchMain    = (_,__) => {},
-    patchExports = (_,__) => {},
-    patchImports = (_,__) => {},
-    exportOrder  = ['browser', 'import', 'default']
+    path              = 'importmap.json',
+    scopes            = {},
+    imports           = {},
+    patchMain         = (_,__) => {},
+    patchExports      = (_,__) => {},
+    patchImports      = (_,__) => {},
+    conditions        = [ 'browser', 'module', 'default' ],
+    legacyEntrypoints = [ 'browser', 'module', 'main' ]
   } = {}) {
     super()
-    this.path         = path
-    this.scopes       = scopes
-    this.imports      = imports
-    this.patchMain    = patchMain
-    this.patchExports = patchExports
-    this.patchImports = patchImports
-    this.exportOrder  = exportOrder
+    this.path              = path
+    this.scopes            = scopes
+    this.imports           = imports
+    this.patchMain         = patchMain
+    this.patchExports      = patchExports
+    this.patchImports      = patchImports
+    this.conditions        = conditions
+    this.legacyEntrypoints = legacyEntrypoints
   }
 
   get stringified () {
@@ -40,11 +43,16 @@ export default class ImportMap extends Logged {
 
   async add (depth, name, version, deps, scope = this.imports) {
     this.log.debug('add:', {depth, name, version, deps, scope})
+
     deps = Object.entries(deps || {})
+
     if (deps.length > 0) {
+
       this.log.log(indent(depth), `deps of ${bold(name||'(unnamed package)')} ${version||'(unspecified version)'}:`)
+
       // For each resolved dependency:
       for (const [name, {version, path, dependencies, imports}] of deps) {
+
         // Load package.json of dependency
         const relpath = relative(process.cwd(), path)
         const manifest = JSON.parse(readFileSync(join(relpath, 'package.json'), 'utf8'))
@@ -52,10 +60,14 @@ export default class ImportMap extends Logged {
         await this.addMain(depth, { scope, name, relpath, manifest })
         const { selfRefs } = await this.addExports(depth, { scope, name, relpath, manifest })
         await this.addImports(depth, { scope, name, relpath, imports })
+
         // Recurse into the dependencies of this dependency:
         await this.add(depth + 2, name, version, dependencies ?? {}, selfRefs ?? {})
+
       }
+
     }
+
     return this
   }
 
@@ -67,31 +79,51 @@ export default class ImportMap extends Logged {
     manifest = Error.required('manifest') || { main: '', module: '', exports: {} }
   } = {}) {
     const { main, module, exports = {} } = manifest
-    // Rule 01A: "module" overrides "main", defaulting to "index.js"
-    const entrypoint = undefined
-      || module
-      || main
-      || (exports["."]||{})["import"]
-      || (exports["."]||{})["default"]
-    // If there is a candidate entrypoint:
-    if (entrypoint) {
-      let target = join(relpath, entrypoint)
-      // Rule 01B: auto-add .js extension
-      if (!existsSync(target) && existsSync(`${target}.js`)) {
-        target = `${target}.js`
-      }
-      // Rule 01C: if entrypoint is a directory, look for index.js in it
-      if (existsSync(target) && statSync(target).isDirectory()) {
-        target = join(target, 'index.js')
-      }
-      // Add to current scope:
-      target = `./${target}`
-      scope[name] = target
-      // Log to console:
-      this.log.log(indent(depth), `  main:`, bold(entrypoint), `-> ${target}`)
-      // Extensibility hook
-      await this.patchMain(this, { depth, scope, name, relpath, manifest, entrypoint })
+
+    let resolvedExports = []
+    try {
+      resolvedExports = resolver.exports(manifest, manifest.name) || [] // this.conditions
+    } catch (e) {
+      this.log.warn(e)
     }
+
+    let resolvedLegacyEntrypoint
+    for (const field of this.legacyEntrypoints) {
+      const resolved = resolver.legacy(manifest, { fields: [field] })
+      if (typeof resolved === 'string') {
+        resolvedLegacyEntrypoint = resolved
+        break
+      }
+    }
+    
+    const entrypoint = [...resolvedExports, resolvedLegacyEntrypoint].filter(Boolean)[0]
+
+    if (!entrypoint) {
+      this.log.warn('No entrypoint found for', bold(name))
+      return
+    }
+
+    let target = join(relpath, entrypoint)
+
+    // auto-add .js extension
+    if (!existsSync(target) && existsSync(`${target}.js`)) {
+      target = `${target}.js`
+    }
+
+    // if entrypoint is a directory, look for index.js in it
+    if (existsSync(target) && statSync(target).isDirectory()) {
+      target = join(target, 'index.js')
+    }
+
+    // Add to current scope:
+    target = `./${target}`
+    scope[name] = target
+
+    this.log.log(indent(depth), `  main:`, bold(entrypoint), `-> ${target}`)
+
+    // Extensibility hook
+    await this.patchMain(this, { depth, scope, name, relpath, manifest, entrypoint })
+
   }
 
   // Rule 02: Add contents of "exports"
@@ -105,6 +137,7 @@ export default class ImportMap extends Logged {
     const selfRefs = this.scopes[`/${relpath}/`] ??= {}
     for (const [specifier, entry] of Object.entries(exports)) {
       let target = undefined
+        ||entry['module']
         ||entry['import']
         ||entry['default']
         ||((typeof entry === 'string')?entry:undefined)
