@@ -99,12 +99,18 @@ export default class Patcher extends Logged {
       const patchExpression = node => {
         //@ts-ignore
         const { source, loc: { start: { line, column } } } = node
-        const { value } = source
-        if (value.startsWith('./') || value.startsWith('../')) {
-          source.value = `${value}${patchExt}`
-          source.raw = JSON.stringify(source.value)
-          log.debug(`  import("${value}") -> import("${source.value}")`)
-          modified = true
+        if (source.value) {
+          const { value } = source
+          if (value.startsWith('./') || value.startsWith('../')) {
+            source.value = `${value}${patchExt}`
+            source.raw = JSON.stringify(source.value)
+            log.debug(`  import("${value}") -> import("${source.value}")`)
+            modified = true
+          }
+        } else {
+          log.warn(
+            `Dynamic or non-standard require() call encountered at ${file}:${line}:${column}.`
+          )
         }
       }
       acornWalk.simple(ast, {
@@ -205,11 +211,7 @@ export default class Patcher extends Logged {
               }
             } else {
               log.warn(
-                `Dynamic or non-standard require() call encountered at ${file}:${line}:${column}. `+
-                `\n\n${recast.print(node).code}\n\n`+
-                `This library only patches calls of the format "require('./my-module')".'\n` +
-                `File an issue at https://github.com/hackbg/ubik if you need to patch ` +
-                `more complex require calls.`
+                `Dynamic or non-standard require() call encountered at ${file}:${line}:${column}.`
               )
             }
           }
