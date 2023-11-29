@@ -23,8 +23,8 @@ export default class ImportMap extends Logged {
     patchMain         = (_,__) => {},
     patchExports      = (_,__) => {},
     patchImports      = (_,__) => {},
-    conditions        = [ 'browser', 'module', 'default' ],
-    legacyEntrypoints = [ 'browser', 'module', 'main' ]
+    conditions        = [ 'module', 'browser', 'default' ],
+    legacyEntrypoints = [ 'module', 'browser', 'main' ]
   } = {}) {
     super()
     this.path              = path
