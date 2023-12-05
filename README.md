@@ -94,8 +94,6 @@ dist/
 
 ## Other tasks
 
-What it does:
-
 ### Fix star imports
 
 When targeting ESM on Node, CommonJS imports are wrapped in an extra `default` key,

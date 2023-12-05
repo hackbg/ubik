@@ -1,10 +1,17 @@
 {
-  "include": [ "*.cjs", "*.mjs", "task/*", "tool/*", "test/*", ".fixtures/fixtures.mjs" ],
+  "include": [
+    "*.cjs",
+    "*.mjs",
+    "src/*",
+    ".fixtures/fixtures.mjs",
+    "ubik.d.ts"
+  ],
   "compilerOptions": {
     "composite": true,
     "target": "esnext",
     "module": "esnext",
     "moduleResolution": "node10",
+    "allowJs": true,
     "checkJs": true,
     "esModuleInterop": true,
     "skipLibCheck": true

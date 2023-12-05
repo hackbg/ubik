@@ -3,3 +3,11 @@ coverage
 **/dist
 **/*.dist.*
 *.tsbuildinfo
+*.d.cts
+*.d.cts.map
+*.d.mts
+*.d.mts.map
+**/*.d.cts
+**/*.d.cts.map
+**/*.d.mts
+**/*.d.mts.map

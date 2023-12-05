@@ -1,23 +1,22 @@
 /** This is file is part of "Ubik", (c) 2023 Hack.bg, available under GNU AGPL v3.
   * You should have received a copy of the GNU Affero General Public License
   * along with this program.  If not, see <http://www.gnu.org/licenses/>. */
-import { UbikError } from './tool-error.mjs'
-import { Console, bold } from './tool-log.mjs'
-import { promisify } from 'node:util'
-import { exec } from 'node:child_process'
-import { relative } from 'node:path'
+import Error from './Error.mjs'
+import { Console, bold } from './Logged.mjs'
 
-const console = new Console('@hackbg/ubik (run)')
+import { promisify } from 'node:util'
+import { exec, execSync, execFileSync, spawnSync } from 'node:child_process'
+import { relative } from 'node:path'
 
 const execPromise = promisify(exec)
 
-export async function runConcurrently ({
+export default async function runConcurrently ({
   cwd      = process.cwd(),
   commands = [],
   verbose  = Boolean(process.env.UBIK_VERBOSE)
 }) {
-  console.br().log(`Running ${bold(commands.length)} commands in ${bold(relative(process.cwd(), cwd))}:`)
-  commands.forEach(command=>console.log(' ', command))
+  const console = new Console(`Runner (${bold(relative(process.cwd(), cwd)||'.')})`)
+  commands.forEach(command=>console.debug(command))
   let result
   try {
     return await Promise.all(commands.map(
@@ -25,13 +24,10 @@ export async function runConcurrently ({
     ))
   } catch (e) {
     process.stdout.write(e.stdout)
-    throw new RunFailed(commands)
+    throw new Error.RunFailed(commands)
   }
 }
 
-export class RunFailed extends UbikError {
-  constructor (commands = []) {
-    super('Running external commands failed. See log output for details.')
-    this.commands = commands
-  }
+export function runLong (cwd, cmd, ...args) {
+  return spawnSync(cmd, args, { maxBuffer: Infinity, cwd }).stdout.toString()
 }
