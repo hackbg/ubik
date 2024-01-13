@@ -7,7 +7,6 @@
     "ubik.d.ts"
   ],
   "compilerOptions": {
-    "composite": true,
     "target": "esnext",
     "module": "esnext",
     "moduleResolution": "node10",
