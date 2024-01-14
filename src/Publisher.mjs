@@ -265,7 +265,10 @@ export class Compiler extends Logged {
     }
     this.pkg.exports ||= {}
     this.pkg.exports = {
-      ...this.pkg.exports, '.': { ...this.pkg.exports['.'] || {}, 'source': this.toRel(this.pkg.main) }
+      ...this.pkg.exports, '.': { 
+        ...(typeof this.pkg.exports['.'] === 'object' ? this.pkg.exports : null) || {},
+        'source': this.toRel(this.pkg.main)
+      }
     }
     if (this.pkg.browser) {
       const ext = ((this.pkg.type === 'module')
@@ -273,7 +276,10 @@ export class Compiler extends Logged {
         : this.emit?.cjs?.outputs)
       const browser = this.toRel(replaceExtension(this.pkg.browser, '.ts', ext || '.dist.js'))
       this.pkg.exports = {
-        ...this.pkg.exports, '.': { ...this.pkg.exports['.'], 'browser': browser }
+        ...this.pkg.exports, '.': {
+          ...this.pkg.exports['.'],
+          'browser': browser
+        }
       }
       this.pkg.browser = browser
     }
