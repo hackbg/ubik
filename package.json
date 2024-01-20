@@ -12,15 +12,13 @@
   "license": "AGPL-3.0-only",
   "files": [
     "README.md",
-    "docs/*",
-    "task/*",
-    "!task/*.test.*",
-    "tool/*",
-    "!tool/*.test.*",
-    "ubik.mjs",
-    "ubik.cli.mjs",
-    "shims.cjs",
-    "package.mjs"
+    "*.svg",
+    "*.cjs",
+    "*.mjs",
+    "!*.test.mjs",
+    "src/*.mjs",
+    "!src/*.test.mjs",
+    "docs/*"
   ],
   "scripts": {
     "release": "./ubik.cli.mjs release --access public --otp 123123",
