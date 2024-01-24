@@ -90,6 +90,7 @@ export class Publisher extends Logged {
       const compiler = new Compiler(this.cwd, options)
       /** Do the TypeScript magic if necessary. */
       if (this.pkg.isTypeScript) {
+				this.log('Compiling and patching TypeScript...')
         await compiler.compileAndPatch()
       }
       try {
@@ -187,7 +188,7 @@ export class Publisher extends Logged {
     if (!version) {
       throw new Error('missing package version')
     }
-    const url = `https://registry.npmjs.org/${name}/${version}` 
+    const url = `https://registry.npmjs.org/${name}/${version}`
     const response = await this.fetch(url)
     if (response.status === 200) {
       if (this.verbose) {
@@ -263,13 +264,15 @@ export class Compiler extends Logged {
       this.log.warn('No "main" in package.json, defaulting to index.ts')
       this.pkg.main = 'index.ts'
     }
+
     this.pkg.exports ||= {}
     this.pkg.exports = {
-      ...this.pkg.exports, '.': { 
+      ...this.pkg.exports, '.': {
         ...(typeof this.pkg.exports['.'] === 'object' ? this.pkg.exports : null) || {},
         'source': this.toRel(this.pkg.main)
       }
     }
+
     if (this.pkg.browser) {
       const ext = ((this.pkg.type === 'module')
         ? this.emit?.esm?.outputs
@@ -283,8 +286,19 @@ export class Compiler extends Logged {
       }
       this.pkg.browser = browser
     }
-    if (this.pkg.type !== 'module') {
+
+    if (process.env.UBIK_DUAL) {
+			this.log('Emitting CJS and ESM...')
+      await this.emitDual()
+    } else if (this.pkg.type === 'module') {
+			this.log('Emitting ESM...')
+      await this.emitESM()
+    } else {
+			this.log('Emitting CJS...')
       await this.emitCJS()
+    }
+
+    if (this.pkg.type !== 'module') {
       this.pkg.types = this.toRel(
         replaceExtension(this.pkg.main, '.ts', this.emit?.cjs?.types||'.dist.d.ts')
       )
@@ -293,7 +307,6 @@ export class Compiler extends Logged {
       )
     } else {
       // 'default' key must go last, see https://stackoverflow.com/a/76127619 *asplode*
-      await this.emitESM()
       this.pkg.types = this.toRel(
         replaceExtension(this.pkg.main, '.ts', this.emit?.esm?.types||'.dist.d.ts')
       )
@@ -301,10 +314,12 @@ export class Compiler extends Logged {
         replaceExtension(this.pkg.main, '.ts', this.emit?.esm?.outputs||'.dist.js')
       )
     }
+
     this.pkg.files = [
       ...this.pkg.files,
       ...this.generated // FIXME: return from emit fns instead
     ]
+
     if (this.dryRun) {
       this.log.br().info(`Patched package.json:\n${this.pkg.stringified}`)
     } else {
@@ -312,7 +327,42 @@ export class Compiler extends Logged {
       copyFileSync(join(this.cwd, 'package.json'), join(this.cwd, 'package.json.bak'))
       writeFileSync(join(this.cwd, 'package.json'), this.pkg.stringified, 'utf8')
     }
+
     return this.generated
+  }
+
+  async emitDual ({
+    esmModule     = process.env.UBIK_ESM_MODULE || 'esnext',
+    esmTarget     = process.env.UBIK_ESM_TARGET || 'esnext',
+    esmOutputs    = '.dist.mjs',
+    esmSourceMaps = esmOutputs && '.dist.mjs.map',
+    esmTypes      = esmOutputs && '.dist.d.mts',
+    esmTypeMaps   = esmTypes   && '.dist.d.mts.map',
+    cjsModule     = process.env.UBIK_CJS_MODULE || 'commonjs',
+    cjsTarget     = process.env.UBIK_CJS_TARGET || 'esnext',
+    cjsOutputs    = '.dist.cjs',
+    cjsSourceMaps = esmOutputs && '.dist.cjs.map',
+    cjsTypes      = esmOutputs && '.dist.d.cts',
+    cjsTypeMaps   = esmTypes   && '.dist.d.cts.map',
+  } = {}) {
+    await Promise.all([
+      this.emitESM({
+        module:     esmModule,
+        target:     esmTarget,
+        outputs:    esmOutputs,
+        sourceMaps: esmSourceMaps,
+        types:      esmTypes,
+        typeMaps:   esmTypeMaps,
+      }),
+      this.emitCJS({
+        module:     cjsModule,
+        target:     cjsTarget,
+        outputs:    cjsOutputs,
+        sourceMaps: cjsSourceMaps,
+        types:      cjsTypes,
+        typeMaps:   cjsTypeMaps,
+      }),
+    ])
   }
 
   async emitESM ({
@@ -323,9 +373,18 @@ export class Compiler extends Logged {
     types      = outputs && '.dist.d.ts',
     typeMaps   = types && '.dist.d.ts.map',
   } = this.emit.esm || Error.required('ESM emit config')) {
-    await this.emitPatched(
-      module, target, outputs, sourceMaps, types, typeMaps, Patcher.MJS, Patcher.MTS
-    )
+    await this.emitPatched({
+			out: this.cwd,
+			cwd: resolve(this.cwd, '.ubik.cjs'),
+      module,
+			target,
+			outputs,
+			sourceMaps,
+			types,
+			typeMaps,
+			CodePatcher: Patcher.MJS,
+			TypePatcher: Patcher.MTS,
+		})
     if (outputs) {
       const esmMain = this.toRel(replaceExtension(this.pkg.main, '.ts', outputs))
       this.pkg.exports = {
@@ -342,9 +401,18 @@ export class Compiler extends Logged {
     types      = outputs && '.dist.d.ts',
     typeMaps   = types && '.dist.d.ts.map',
   } = this.emit.cjs || Error.required('CJS emit config')) {
-    await this.emitPatched(
-      module, target, outputs, sourceMaps, types, typeMaps, Patcher.CJS, Patcher.CTS
-    )
+    await this.emitPatched({
+			out: this.cwd,
+			cwd: resolve(this.cwd, '.ubik.cjs'),
+      module,
+			target,
+			outputs,
+			sourceMaps,
+			types,
+			typeMaps,
+			CodePatcher: Patcher.CJS,
+			TypePatcher: Patcher.CTS,
+		})
     if (outputs) {
       const cjsMain = this.toRel(replaceExtension(this.pkg.main, '.ts', outputs))
       this.pkg.exports = {
@@ -363,19 +431,28 @@ export class Compiler extends Logged {
     *
     * @arg {typeof Patcher} CodePatcher implementation
     * @art {typeof Patcher} TypePatcher implementation */
-  async emitPatched (
-    module, target, outputs, sourceMaps, types, typeMaps, CodePatcher, TypePatcher
-  ) {
+  async emitPatched ({
+		out = this.cwd,
+		cwd = resolve(out, '.ubik'),
+    module,
+		target,
+		outputs,
+		sourceMaps,
+		types,
+		typeMaps,
+		CodePatcher,
+		TypePatcher,
+	}) {
     const dryRun = this.dryRun
-    const out = this.cwd
-    const cwd = resolve(this.cwd, '.ubik')
     if (outputs||sourceMaps||types||typeMaps) {
       rimrafSync(cwd)
       mkdirpSync(cwd)
       await this.run([this.tsc,
         '--target', target,
         '--module', module,
+				'--moduleResolution', 'node10',
         '--outDir', cwd,
+				'--esModuleInterop',
         sourceMaps && '--sourceMap',
         types      && '--declaration',
         typeMaps   && '--declarationMap',
