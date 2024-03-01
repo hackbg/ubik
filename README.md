@@ -22,49 +22,44 @@ and life in general - or your money back!
 
 </div>
 
-## Quick start
+## Publishing a package
 
-`tsc` outputs invalid JavaScript when building ESM libraries. [Read more](./docs/extensions.md)
+The first thing Ubik can do for you is publish well-formed dual CJS/ESM packages from
+TypeScript sources. For this, use the `ubik release` command.
 
-* Node 16+ requires extensions in ESM `import`
-* TypeScript does something weird and hamstrung
-* Then people told them and they made it worse
+```
+npm run ubik release
+```
 
-The easiest way to use valid ESM is to let it publish your TypeScript package to NPM:
+The resulting package will contain the `.ts` source alongside all of the following:
+
+* TypeScript source:
+    * `*.ts` source code files
+* ES Modules:
+    * `*.dist.mjs` compiled code files
+    * `*.dist.mjs.map` source maps
+    * `*.dist.d.mts` typedefs
+    * `*.dist.d.mts.map` type maps
+* CommonJS:
+    * `*.dist.cjs` compiled code files
+    * `*.dist.cjs.map` source maps
+    * `*.dist.d.cts` typedefs
+    * `*.dist.d.cts.map` type maps
+
+Recommended `package.json`:
 
 ```json
 {
   "main": "index.ts",
   "devDependencies": {
     "typescript": "latest",
-    "@hackbg/ubik": "^2"
+    "@hackbg/ubik": "^4"
   },
   "scripts": {
     "release": "ubik release --access public"
   }
 }
 ```
-
-* Append `--otp 000000` to the `release` command if you use NPM 2FA to avoid a login loop.
-
-And now you can publish your library with:
-
-```bash
-npm run release
-# what we do is:
-pnpm release
-```
-
-You can also apply the fix in place, then do the rest of the release in your own way:
-
-```sh
-npm run ubik compile
-```
-
-* Note that this will generate a new `package.json` for your package
-and leave the original at `package.json.bak`.
-
-* Don't commit the generated `package.json`, it's for releases only.
 
 Recommended `tsconfig.json`:
 
@@ -90,6 +85,25 @@ dist/
 *.dist.mjs
 *.dist.cjs
 *.dist.d.ts
+```
+
+Notes:
+
+* Compiling will generate a patched `package.json`, and leave the original at `package.json.bak`.
+  Don't commit the generated `package.json` and `package.json.bak`, they are for releases only.
+* Append `--otp 000000` to the `release` command if you use NPM 2FA to avoid a login loop.
+* `tsc` outputs invalid JavaScript when building ESM libraries. [Read more](./docs/extensions.md)
+    * Node 16+ requires extensions in ESM `import`
+    * TypeScript does something weird and hamstrung
+    * Then people told them and they made it worse
+
+## Compiling a package
+
+You can also apply the fix in place using the `ubik compile` command,
+then do the rest of the release in your own way:
+
+```sh
+npm run ubik compile
 ```
 
 ## Other tasks

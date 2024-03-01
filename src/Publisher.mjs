@@ -258,11 +258,16 @@ export class Compiler extends Logged {
   }
 
   async compileAndPatch () {
+    // Set ubik flag in package. This is so that Ubik does not process the same package twice.
     this.pkg.ubik = true
+
+    // Set default main entrypoint of module if missing.
     if (!this.pkg.main) {
       this.log.warn('No "main" in package.json, defaulting to index.ts')
       this.pkg.main = 'index.ts'
     }
+
+    // Inherit preset exports of package.
     this.pkg.exports ||= {}
     this.pkg.exports = {
       ...this.pkg.exports, '.': { 
@@ -270,6 +275,8 @@ export class Compiler extends Logged {
         'source': this.toRel(this.pkg.main)
       }
     }
+
+    // If there's a browser-specific entrypoint, include it in the exports.
     if (this.pkg.browser) {
       const ext = ((this.pkg.type === 'module')
         ? this.emit?.esm?.outputs
@@ -283,28 +290,38 @@ export class Compiler extends Logged {
       }
       this.pkg.browser = browser
     }
+
+    // Emit CJS and ESM versions.
+    await Promise.all([
+      this.emitCJS(),
+      this.emitESM(),
+    ])
+
+    // Set default entrypoints depending on package type.
     if (this.pkg.type !== 'module') {
-      await this.emitCJS()
       this.pkg.types = this.toRel(
-        replaceExtension(this.pkg.main, '.ts', this.emit?.cjs?.types||'.dist.d.ts')
+        replaceExtension(this.pkg.main, '.ts', this.emit?.cjs?.types||'.dist.d.cts')
       )
       this.pkg.main = this.toRel(
-        replaceExtension(this.pkg.main, '.ts', this.emit?.cjs?.outputs||'.dist.js')
+        replaceExtension(this.pkg.main, '.ts', this.emit?.cjs?.outputs||'.dist.cjs')
       )
     } else {
       // 'default' key must go last, see https://stackoverflow.com/a/76127619 *asplode*
-      await this.emitESM()
       this.pkg.types = this.toRel(
-        replaceExtension(this.pkg.main, '.ts', this.emit?.esm?.types||'.dist.d.ts')
+        replaceExtension(this.pkg.main, '.ts', this.emit?.esm?.types||'.dist.d.mts')
       )
       this.pkg.main = this.toRel(
-        replaceExtension(this.pkg.main, '.ts', this.emit?.esm?.outputs||'.dist.js')
+        replaceExtension(this.pkg.main, '.ts', this.emit?.esm?.outputs||'.dist.mjs')
       )
     }
+
+    // Include generated files into package.
     this.pkg.files = [
       ...this.pkg.files,
       ...this.generated // FIXME: return from emit fns instead
     ]
+
+    // Write package.json if it's not a dry run.
     if (this.dryRun) {
       this.log.br().info(`Patched package.json:\n${this.pkg.stringified}`)
     } else {
@@ -312,16 +329,17 @@ export class Compiler extends Logged {
       copyFileSync(join(this.cwd, 'package.json'), join(this.cwd, 'package.json.bak'))
       writeFileSync(join(this.cwd, 'package.json'), this.pkg.stringified, 'utf8')
     }
+
     return this.generated
   }
 
   async emitESM ({
     module = process.env.UBIK_ESM_MODULE || 'esnext',
     target = process.env.UBIK_ESM_TARGET || 'esnext',
-    outputs    = '.dist.js',
-    sourceMaps = outputs && '.dist.js.map',
-    types      = outputs && '.dist.d.ts',
-    typeMaps   = types && '.dist.d.ts.map',
+    outputs    = '.dist.mjs',
+    sourceMaps = outputs && '.dist.mjs.map',
+    types      = outputs && '.dist.d.mts',
+    typeMaps   = types   && '.dist.d.mts.map',
   } = this.emit.esm || Error.required('ESM emit config')) {
     await this.emitPatched(
       module, target, outputs, sourceMaps, types, typeMaps, Patcher.MJS, Patcher.MTS
@@ -337,10 +355,10 @@ export class Compiler extends Logged {
   async emitCJS ({
     module = process.env.UBIK_CJS_MODULE || 'commonjs',
     target = process.env.UBIK_CJS_TARGET || 'esnext',
-    outputs    = '.dist.js',
-    sourceMaps = outputs && '.dist.js.map',
-    types      = outputs && '.dist.d.ts',
-    typeMaps   = types && '.dist.d.ts.map',
+    outputs    = '.dist.cjs',
+    sourceMaps = outputs && '.dist.cjs.map',
+    types      = outputs && '.dist.d.cts',
+    typeMaps   = types   && '.dist.d.cts.map',
   } = this.emit.cjs || Error.required('CJS emit config')) {
     await this.emitPatched(
       module, target, outputs, sourceMaps, types, typeMaps, Patcher.CJS, Patcher.CTS
