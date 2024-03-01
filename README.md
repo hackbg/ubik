@@ -31,21 +31,6 @@ TypeScript sources. For this, use the `ubik release` command.
 npm run ubik release
 ```
 
-The resulting package will contain the `.ts` source alongside all of the following:
-
-* TypeScript source:
-    * `*.ts` source code files
-* ES Modules:
-    * `*.dist.mjs` compiled code files
-    * `*.dist.mjs.map` source maps
-    * `*.dist.d.mts` typedefs
-    * `*.dist.d.mts.map` type maps
-* CommonJS:
-    * `*.dist.cjs` compiled code files
-    * `*.dist.cjs.map` source maps
-    * `*.dist.d.cts` typedefs
-    * `*.dist.d.cts.map` type maps
-
 Recommended `package.json`:
 
 ```json
@@ -81,17 +66,36 @@ Recommended `.gitignore`:
 ```
 package.json.bak
 dist/
-*.dist.js
+.ubik
+.ubik.cjs
+.ubik.esm
 *.dist.mjs
+*.dist.mjs.map
 *.dist.cjs
-*.dist.d.ts
+*.dist.cjs.map
+*.dist.d.cts
+*.dist.d.cts.map
+*.dist.d.mts
+*.dist.d.mts.map
 ```
 
-Notes:
+The resulting package will contain the `.ts` source alongside all of the following:
 
-* Compiling will generate a patched `package.json`, and leave the original at `package.json.bak`.
-  Don't commit the generated `package.json` and `package.json.bak`, they are for releases only.
-* Append `--otp 000000` to the `release` command if you use NPM 2FA to avoid a login loop.
+|           |TypeScript|ES Modules     |CommonJS       |
+|-----------|----------|---------------|---------------|
+|Code       |.ts       |.dist.mjs      |.dist.cjs      |
+|Source maps|          |.dist.mjs.map  |.dist.cjs.map  |
+|Typedefs   |          |.dist.d.mts    |.dist.d.cts    |
+|Type maps  |          |.dist.d.mts.map|.dist.d.cts.map|
+
+That's 8 extra files generated for source file! But if that's what it takes...
+
+Compiling will generate a patched `package.json`, and leave the original at `package.json.bak`.
+Don't commit the generated `package.json` and `package.json.bak`, they are for releases only.
+
+Good to know:
+
+* **If you use NPM 2FA**, append `--otp 000000` to the `release` command to avoid a login loop.
 * `tsc` outputs invalid JavaScript when building ESM libraries. [Read more](./docs/extensions.md)
     * Node 16+ requires extensions in ESM `import`
     * TypeScript does something weird and hamstrung

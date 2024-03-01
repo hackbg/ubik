@@ -67,8 +67,8 @@ export default class Patcher extends Logged {
   static MJS = class MJSPatcher extends Patcher {
 
     constructor (options) {
-      options.matchExt ??= '.js'
-      options.patchExt ??= '.dist.js'
+      options.matchExt ??= '.mjs'
+      options.patchExt ??= '.dist.mjs'
       super(options)
     }
 
@@ -137,8 +137,8 @@ export default class Patcher extends Logged {
   static MTS = class MTSPatcher extends Patcher {
 
     constructor (options) {
-      options.matchExt ??= '.d.ts'
-      options.patchExt ??= '.dist.d.ts'
+      options.matchExt ??= '.d.mts'
+      options.patchExt ??= '.dist.d.mts'
       super(options)
     }
 
@@ -171,8 +171,8 @@ export default class Patcher extends Logged {
   static CJS = class CJSPatcher extends Patcher {
 
     constructor (options) {
-      options.matchExt ??= '.js'
-      options.patchExt ??= '.dist.js'
+      options.matchExt ??= '.cjs'
+      options.patchExt ??= '.dist.cjs'
       super(options)
     }
 
@@ -226,8 +226,8 @@ export default class Patcher extends Logged {
   static CTS = class CTSPatcher extends Patcher {
 
     constructor (options) {
-      options.matchExt ??= '.d.ts'
-      options.patchExt ??= '.dist.d.ts'
+      options.matchExt ??= '.d.cts'
+      options.patchExt ??= '.dist.d.cts'
       super(options)
     }
 

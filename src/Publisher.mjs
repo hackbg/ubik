@@ -50,6 +50,10 @@ export class Publisher extends Logged {
     this.git = git
   }
 
+  runGit (command) {
+    return execSync(`${this.git} ${command}`, { cwd: this.cwd, stdio: 'inherit' })
+  }
+
   async releasePackage () {
     if (this.pkg.private) {
       this.log.info('Skipping private package:', this.pkg.name)
@@ -86,8 +90,12 @@ export class Publisher extends Logged {
       } else {
         this.args = makeSureRunIsDry(this.args)
       }
-      const options = { dryRun: this.dryRun, pkg: this.pkg, args: this.args, keep: this.keep }
-      const compiler = new Compiler(this.cwd, options)
+      const compiler = new Compiler(this.cwd, {
+        dryRun: this.dryRun,
+        pkg:    this.pkg,
+        args:   this.args,
+        keep:   this.keep
+      })
       /** Do the TypeScript magic if necessary. */
       if (this.pkg.isTypeScript) {
         await compiler.compileAndPatch()
@@ -136,17 +144,11 @@ export class Publisher extends Logged {
     if (noTag) {
       return {}
     }
-    execSync(
-      `${this.git} tag -f "${tag}"`,
-      { cwd: this.cwd, stdio: 'inherit' }
-    )
+    this.runGit(`tag -f "${tag}"`)
     if (noPush) {
       return { tag }
     }
-    execSync(
-      `${this.git} push --tags`,
-      { cwd: this.cwd, stdio: 'inherit' }
-    )
+    this.runGit('push --tags')
     return {
       tag,
       pushed: true
@@ -204,7 +206,10 @@ export class Publisher extends Logged {
   }
 
   preliminaryDryRun () {
-    return runPackageManager({ cwd: this.cwd, args: ['publish', '--dry-run', ...this.args] })
+    return runPackageManager({
+      cwd: this.cwd,
+      args: ['publish', '--dry-run', ...this.args]
+    })
   }
 
 }
@@ -323,9 +328,13 @@ export class Compiler extends Logged {
 
     // Write package.json if it's not a dry run.
     if (this.dryRun) {
-      this.log.br().info(`Patched package.json:\n${this.pkg.stringified}`)
+      this.log.br().info(
+        `Contents of patched package.json:\n${this.pkg.stringified}`
+      )
     } else {
-      this.log.log("Backing up package.json to package.json.bak")
+      this.log.log(
+        "Backing up package.json to package.json.bak"
+      )
       copyFileSync(join(this.cwd, 'package.json'), join(this.cwd, 'package.json.bak'))
       writeFileSync(join(this.cwd, 'package.json'), this.pkg.stringified, 'utf8')
     }
@@ -342,12 +351,25 @@ export class Compiler extends Logged {
     typeMaps   = types   && '.dist.d.mts.map',
   } = this.emit.esm || Error.required('ESM emit config')) {
     await this.emitPatched(
-      module, target, outputs, sourceMaps, types, typeMaps, Patcher.MJS, Patcher.MTS
+      resolve(this.cwd, '.ubik-esm'),
+      module,
+      target,
+      outputs,
+      sourceMaps,
+      types,
+      typeMaps,
+      Patcher.MJS,
+      Patcher.MTS
     )
     if (outputs) {
-      const esmMain = this.toRel(replaceExtension(this.pkg.main, '.ts', outputs))
       this.pkg.exports = {
-        ...this.pkg.exports, '.': { ...this.pkg.exports['.'], 'default': esmMain }
+        ...this.pkg.exports,
+        '.': {
+          ...this.pkg.exports['.'],
+          'default': this.toRel(
+            replaceExtension(this.pkg.main, '.ts', outputs)
+          )
+        }
       }
     }
   }
@@ -361,16 +383,30 @@ export class Compiler extends Logged {
     typeMaps   = types   && '.dist.d.cts.map',
   } = this.emit.cjs || Error.required('CJS emit config')) {
     await this.emitPatched(
-      module, target, outputs, sourceMaps, types, typeMaps, Patcher.CJS, Patcher.CTS
+      resolve(this.cwd, '.ubik-cjs'),
+      module,
+      target,
+      outputs,
+      sourceMaps,
+      types,
+      typeMaps,
+      Patcher.CJS, 
+      Patcher.CTS,
     )
     if (outputs) {
-      const cjsMain = this.toRel(replaceExtension(this.pkg.main, '.ts', outputs))
       this.pkg.exports = {
-        ...this.pkg.exports, '.': { ...this.pkg.exports['.'], 'require': cjsMain }
+        ...this.pkg.exports,
+        '.': {
+          ...this.pkg.exports['.'],
+          'require': this.toRel(
+            replaceExtension(this.pkg.main, '.ts', outputs)
+          )
+        }
       }
     }
   }
 
+  /** @arg {string} outDir path
   /** @arg {string} module setting
     * @arg {string} target setting
     *
@@ -382,43 +418,61 @@ export class Compiler extends Logged {
     * @arg {typeof Patcher} CodePatcher implementation
     * @art {typeof Patcher} TypePatcher implementation */
   async emitPatched (
-    module, target, outputs, sourceMaps, types, typeMaps, CodePatcher, TypePatcher
+    outDir,
+    module,
+    target,
+    outputs,
+    sourceMaps,
+    types,
+    typeMaps,
+    CodePatcher,
+    TypePatcher
   ) {
     const dryRun = this.dryRun
-    const out = this.cwd
-    const cwd = resolve(this.cwd, '.ubik')
     if (outputs||sourceMaps||types||typeMaps) {
-      rimrafSync(cwd)
-      mkdirpSync(cwd)
+      this.log.log(
+        'Creating empty', bold(outDir)
+      )
+      rimrafSync(outDir)
+      mkdirpSync(outDir)
       await this.run([this.tsc,
         '--target', target,
         '--module', module,
-        '--outDir', cwd,
+        '--outDir', outDir,
         sourceMaps && '--sourceMap',
         types      && '--declaration',
         typeMaps   && '--declarationMap',
       ].join(' '))
       if (outputs) {
+        this.log.log(
+          'Collecting code from', bold(outDir)
+        )
         await this.revertable(`patch ${outputs}`,
-          ()=>new CodePatcher({cwd, dryRun}).patchAll(outputs))
+          ()=>new CodePatcher({cwd: outDir, dryRun}).patchAll(outputs))
         await this.revertable(`collect ${outputs}`,
-          ()=>this.collect(cwd, '.js', out, outputs))
+          ()=>this.collect(outDir, '.js', this.cwd, outputs))
         if (sourceMaps) {
           await this.revertable(`collect ${sourceMaps}`,
-            ()=>this.collect(cwd, '.js.map', out, sourceMaps))
+            ()=>this.collect(outDir, '.js.map', this.cwd, sourceMaps))
         }
       }
       if (types) {
+        this.log.log(
+          'Collecting types from', bold(outDir)
+        )
         await this.revertable(`patch ${types}`,
-          ()=>new TypePatcher({cwd, dryRun}).patchAll(types))
+          ()=>new TypePatcher({cwd: outDir, dryRun}).patchAll(types))
         await this.revertable(`collect ${outputs}`,
-          ()=>this.collect(cwd, '.d.ts', out, types))
+          ()=>this.collect(outDir, '.d.ts', this.cwd, types))
         if (typeMaps) {
           await this.revertable(`collect ${typeMaps}`,
-            ()=>this.collect(cwd, '.d.ts.map', out, typeMaps))
+            ()=>this.collect(outDir, '.d.ts.map', this.cwd, typeMaps))
         }
       }
-      rimrafSync(cwd)
+      this.log.log(
+        'Removing', bold(outDir)
+      )
+      rimrafSync(outDir)
     }
   }
 
@@ -428,7 +482,7 @@ export class Compiler extends Logged {
     outDir  = Error.required('outDir')  || '',
     outExt  = Error.required('outExt')  || '',
   ) {
-    this.log.debug(
+    this.log.log(
       `Collecting from ${bold(this.toRel(tempDir))}: ${bold(tempExt)} -> ${bold(`${outExt}`)}`
     )
     const glob1 = `${tempDir}/*${tempExt}`
@@ -441,10 +495,22 @@ export class Compiler extends Logged {
       const outFile = replaceExtension(
         join(outDir, relative(tempDir, file)), tempExt, outExt
       )
+      this.log.debug({
+        srcFile,
+        outDir,
+        tempDir,
+        file,
+        tempExt,
+        outExt,
+        outFile
+      })
       mkdirpSync(dirname(outFile))
       if (this.verbose) {
         this.log.debug(`${this.toRel(srcFile)} -> ${this.toRel(outFile)}`)
       }
+      this.log.debug(
+        'Collect', bold(relative(this.cwd, srcFile)), '->', bold(relative(this.cwd, outFile))
+      )
       copyFileSync(srcFile, outFile)
       unlinkSync(srcFile)
       outputs.push(outFile)
@@ -455,7 +521,7 @@ export class Compiler extends Logged {
   }
 
   run (...commands) {
-    this.log.debug('Running in', bold(resolve(this.cwd)))
+    this.log.log(`Running ${commands.length} command(s) in`, bold(resolve(this.cwd))+':')
     return runConcurrently({ cwd: this.cwd, commands })
   }
 

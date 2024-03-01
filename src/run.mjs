@@ -15,7 +15,7 @@ export default async function runConcurrently ({
   commands = [],
   verbose  = Boolean(process.env.UBIK_VERBOSE)
 }) {
-  const console = new Console(`Runner (${bold(relative(process.cwd(), cwd)||'.')})`)
+  const console = new Console(``)
   commands.forEach(command=>console.debug(command))
   let result
   try {
