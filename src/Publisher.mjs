@@ -507,15 +507,15 @@ export class Compiler extends Logged {
       const outFile = replaceExtension(
         join(outDir, relative(tempDir, file)), tempExt, outExt
       )
-      this.log.debug({
-        srcFile,
-        outDir,
-        tempDir,
-        file,
-        tempExt,
-        outExt,
-        outFile
-      })
+      //this.log.debug({
+        //srcFile,
+        //outDir,
+        //tempDir,
+        //file,
+        //tempExt,
+        //outExt,
+        //outFile
+      //})
       mkdirpSync(dirname(outFile))
       if (this.verbose) {
         this.log.debug(`${this.toRel(srcFile)} -> ${this.toRel(outFile)}`)
