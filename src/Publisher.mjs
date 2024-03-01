@@ -262,6 +262,30 @@ export class Compiler extends Logged {
     this.keep = keep
   }
 
+  run (...commands) {
+    this.log.log(`Running ${commands.length} command(s) in`, bold(resolve(this.cwd))+':')
+    return runConcurrently({ cwd: this.cwd, commands })
+  }
+
+  toRel (...args) {
+    return toRel(this.cwd, ...args)
+  }
+
+  revertable (name, fn) {
+    try { return fn() } catch (e) { this.onError(name)(e) }
+  }
+
+  onError (source) {
+    return e => {
+      this.log.br().error(
+        `${bold(source)} failed:`,
+        bold(e.message)+'\n'+e.stack.slice(e.stack.indexOf('\n'))
+      )
+      this.revert()
+      throw e
+    }
+  }
+
   async compileAndPatch () {
     // Set ubik flag in package. This is so that Ubik does not process the same package twice.
     this.pkg.ubik = true
@@ -298,11 +322,65 @@ export class Compiler extends Logged {
 
     // Emit CJS and ESM versions.
     await Promise.all([
-      this.emitCJS(),
-      this.emitESM(),
+      this.emitPatched(resolve(this.cwd, '.ubik-esm'), {
+        module:      process.env.UBIK_ESM_MODULE || 'esnext',
+        target:      process.env.UBIK_ESM_TARGET || 'esnext',
+        outputs:     '.dist.mjs',
+        sourceMaps:  '.dist.mjs.map',
+        types:       '.dist.d.mts',
+        typeMaps:    '.dist.d.mts.map',
+        CodePatcher: Patcher.MJS,
+        TypePatcher: Patcher.MTS
+      }),
+      this.emitPatched(resolve(this.cwd, '.ubik-cjs'), {
+        module:      process.env.UBIK_CJS_MODULE || 'commonjs',
+        target:      process.env.UBIK_CJS_TARGET || 'esnext',
+        outputs:     '.dist.cjs',
+        sourceMaps:  '.dist.cjs.map',
+        types:       '.dist.d.cts',
+        typeMaps:    '.dist.d.cts.map',
+        CodePatcher: Patcher.CJS, 
+        TypePatcher: Patcher.CTS,
+      }),
     ])
 
-    // Set default entrypoints depending on package type.
+    // Set exports in package.json
+    this.pkg.exports = {
+      ...this.pkg.exports,
+      '.': {
+        ...this.pkg.exports['.'],
+        'import': {
+          'types': this.toRel(
+            replaceExtension(this.pkg.main, '.ts', '.dist.d.mts')
+          ),
+          'default': this.toRel(
+            replaceExtension(this.pkg.main, '.ts', '.dist.mjs')
+          ),
+        },
+        'require': {
+          'types': this.toRel(
+            replaceExtension(this.pkg.main, '.ts', '.dist.d.cts')
+          ),
+          'default': this.toRel(
+            replaceExtension(this.pkg.main, '.ts', '.dist.cjs')
+          )
+        },
+        'types': this.toRel(
+          replaceExtension(
+            this.pkg.main, '.ts',
+            (this.pkg.type !== 'module') ? '.dist.d.mts' : '.dist.d.cts'
+          )
+        ),
+        'default': this.toRel(
+          replaceExtension(
+            this.pkg.main, '.ts',
+            (this.pkg.type !== 'module') ? '.dist.mjs' : '.dist.cjs'
+          )
+        )
+      }
+    }
+
+    // Set default entrypoints in package.json, depending on package type.
     if (this.pkg.type !== 'module') {
       this.pkg.types = this.toRel(
         replaceExtension(this.pkg.main, '.ts', this.emit?.cjs?.types||'.dist.d.cts')
@@ -342,83 +420,17 @@ export class Compiler extends Logged {
     return this.generated
   }
 
-  async emitESM ({
-    module = process.env.UBIK_ESM_MODULE || 'esnext',
-    target = process.env.UBIK_ESM_TARGET || 'esnext',
-    outputs    = '.dist.mjs',
-    sourceMaps = outputs && '.dist.mjs.map',
-    types      = outputs && '.dist.d.mts',
-    typeMaps   = types   && '.dist.d.mts.map',
-  } = this.emit.esm || Error.required('ESM emit config')) {
-    await this.emitPatched(
-      resolve(this.cwd, '.ubik-esm'),
-      module,
-      target,
-      outputs,
-      sourceMaps,
-      types,
-      typeMaps,
-      Patcher.MJS,
-      Patcher.MTS
-    )
-    if (outputs) {
-      this.pkg.exports = {
-        ...this.pkg.exports,
-        '.': {
-          ...this.pkg.exports['.'],
-          'default': this.toRel(
-            replaceExtension(this.pkg.main, '.ts', outputs)
-          )
-        }
-      }
-    }
-  }
-
-  async emitCJS ({
-    module = process.env.UBIK_CJS_MODULE || 'commonjs',
-    target = process.env.UBIK_CJS_TARGET || 'esnext',
-    outputs    = '.dist.cjs',
-    sourceMaps = outputs && '.dist.cjs.map',
-    types      = outputs && '.dist.d.cts',
-    typeMaps   = types   && '.dist.d.cts.map',
-  } = this.emit.cjs || Error.required('CJS emit config')) {
-    await this.emitPatched(
-      resolve(this.cwd, '.ubik-cjs'),
-      module,
-      target,
-      outputs,
-      sourceMaps,
-      types,
-      typeMaps,
-      Patcher.CJS, 
-      Patcher.CTS,
-    )
-    if (outputs) {
-      this.pkg.exports = {
-        ...this.pkg.exports,
-        '.': {
-          ...this.pkg.exports['.'],
-          'require': this.toRel(
-            replaceExtension(this.pkg.main, '.ts', outputs)
-          )
-        }
-      }
-    }
-  }
-
-  /** @arg {string} outDir path
-  /** @arg {string} module setting
-    * @arg {string} target setting
-    *
-    * @arg {string} outputs    extension
-    * @arg {string} sourceMaps extension
-    * @arg {string} types      extension
-    * @arg {string} typeMaps   extension
-    *
-    * @arg {typeof Patcher} CodePatcher implementation
-    * @art {typeof Patcher} TypePatcher implementation */
-  async emitPatched (
-    outDir,
+  /** @arg {string} outDir                      - path to output directory
+    * @arg {Object} options                     - options
+    * @arg {string} options.module              - tsconfig module setting
+    * @arg {string} options.target              - tsconfig target setting
+    * @arg {string} options.outputs             - code file extension
+    * @arg {string} options.sourceMaps          - source map file extension
+    * @arg {string} options.types               - type declaration file extension
+    * @arg {string} options.typeMaps            - declaration map file extension
+    * @arg {typeof Patcher} options.CodePatcher - patcher for code
+    * @arg {typeof Patcher} options.TypePatcher - patcher for types */
+  async emitPatched (outDir, {
     module,
     target,
     outputs,
@@ -427,7 +439,7 @@ export class Compiler extends Logged {
     typeMaps,
     CodePatcher,
     TypePatcher
-  ) {
+  }) {
     const dryRun = this.dryRun
     if (outputs||sourceMaps||types||typeMaps) {
       this.log.log(
@@ -515,32 +527,6 @@ export class Compiler extends Logged {
       unlinkSync(srcFile)
       outputs.push(outFile)
       this.generated.add(this.toRel(outFile))
-    }
-    //console.log({globs, inputs, outputs})
-    //console.log(await fastGlob(['!node_modules', '!**/node_modules', '.ubik/*']))
-  }
-
-  run (...commands) {
-    this.log.log(`Running ${commands.length} command(s) in`, bold(resolve(this.cwd))+':')
-    return runConcurrently({ cwd: this.cwd, commands })
-  }
-
-  toRel (...args) {
-    return toRel(this.cwd, ...args)
-  }
-
-  revertable (name, fn) {
-    try { return fn() } catch (e) { this.onError(name)(e) }
-  }
-
-  onError (source) {
-    return e => {
-      this.log.br().error(
-        `${bold(source)} failed:`,
-        bold(e.message)+'\n'+e.stack.slice(e.stack.indexOf('\n'))
-      )
-      this.revert()
-      throw e
     }
   }
 
