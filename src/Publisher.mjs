@@ -368,13 +368,13 @@ export class Compiler extends Logged {
         'types': this.toRel(
           replaceExtension(
             this.pkg.main, '.ts',
-            (this.pkg.type !== 'module') ? '.dist.d.mts' : '.dist.d.cts'
+            (this.pkg.type === 'module') ? '.dist.d.mts' : '.dist.d.cts'
           )
         ),
         'default': this.toRel(
           replaceExtension(
             this.pkg.main, '.ts',
-            (this.pkg.type !== 'module') ? '.dist.mjs' : '.dist.cjs'
+            (this.pkg.type === 'module') ? '.dist.mjs' : '.dist.cjs'
           )
         )
       }
