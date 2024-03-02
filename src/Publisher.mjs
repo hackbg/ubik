@@ -18,9 +18,7 @@ import { rimrafSync } from 'rimraf'
 import fastGlob from 'fast-glob'
 
 export class Publisher extends Logged {
-
   static printUsage () {}
-
   constructor (cwd, {
     pkg = new Package(cwd),
     /** Verbose logging mode. */
@@ -37,6 +35,8 @@ export class Publisher extends Logged {
     git = 'git',
     /** Fetch function to use */
     fetch = globalThis.fetch,
+    /** Extension fragment denoting a compiled file. */
+    compiled = process.env.UBIK_DIST || '.dist'
   } = {}) {
     super()
     this.cwd = cwd
@@ -49,182 +49,24 @@ export class Publisher extends Logged {
     this.npm = npm
     this.git = git
   }
-
-  runGit (command) {
-    return execSync(`${this.git} ${command}`, { cwd: this.cwd, stdio: 'inherit' })
-  }
-
-  async releasePackage () {
-    if (this.pkg.private) {
-      this.log.info('Skipping private package:', this.pkg.name)
-      return true
-    }
-    if (this.pkg.ubik && !!process.env.UBIK_SKIP_FIXED) {
-      this.log.warn('Skipping patched package:', this.pkg.name)
-      return true
-    }
-    const previousCwd = process.cwd()
-    try {
-      process.chdir(this.cwd)
-      this.log.debug('Working in', process.cwd())
-      const { name, version } = this.pkg
-      /** Make sure Git tag doesn't exist. */
-      let tag
-      if (name) {
-        tag = this.ensureFreshTag()
-      }
-      /** Second deduplication: Make sure the library is not already published. */
-      if (await this.isPublished()) {
-        console.warn(
-          bold(version), 'is already published. Increment version in package.json to publish.'
-        )
-        return
-      }
-      /** Print the contents of package.json if we'll be publishing. */
-      if (this.verbose) {
-        console.log(`Original package.json:\n${JSON.stringify(this.pkg, null, 2)}`)
-      }
-      /** In wet mode, try a dry run first. */
-      if (!this.dryRun) {
-        this.preliminaryDryRun()
-      } else {
-        this.args = makeSureRunIsDry(this.args)
-      }
-      const compiler = new Compiler(this.cwd, {
-        dryRun: this.dryRun,
-        pkg:    this.pkg,
-        args:   this.args,
-        keep:   this.keep
-      })
-      /** Do the TypeScript magic if necessary. */
-      if (this.pkg.isTypeScript) {
-        await compiler.compileAndPatch()
-      }
-      try {
-        /** If this is not a dry run, publish to NPM */
-        if (!this.dryRun) {
-          this.performRelease()
-          if (!this.args.includes('--dry-run') && tag) {
-            this.tagRelease({ tag })
-          }
-        } else {
-          console.log('Dry run successful:', tag)
-        }
-      } catch (e) {
-        /** Restore everything to a (near-)pristine state. */
-        compiler.revert()
-        throw e
-      }
-      compiler.revert()
-      this.log.debug('Returning to', previousCwd)
-      process.chdir(previousCwd)
-      return this.pkg
-    } finally {
-      this.log.debug('Returning to', previousCwd)
-      process.chdir(previousCwd)
-    }
-  }
-
-  performRelease () {
-    console.log(`${this.npm} publish`, ...this.args)
-    return runPackageManager({
-      cwd: this.cwd,
-      npm: this.npm,
-      args: ['publish', '--no-git-checks', ...this.args]
-    })
-  }
-
-  tagRelease ({
-    tag    = undefined,
-    noTag  = Boolean(process.env.UBIK_NO_TAG),
-    noPush = Boolean(process.env.UBIK_NO_PUSH),
-  } = {}) {
-    console.br().log('Published:', tag)
-    // Add Git tag
-    if (noTag) {
-      return {}
-    }
-    this.runGit(`tag -f "${tag}"`)
-    if (noPush) {
-      return { tag }
-    }
-    this.runGit('push --tags')
-    return {
-      tag,
-      pushed: true
-    }
-  }
-
-  /** Bail if Git tag already exists.
-    * @arg {{ name: string, version: string }} pkg */
-  ensureFreshTag ({ name, version } = this.pkg) {
-    if (!name) {
-      throw new Error('missing package name')
-    }
-    if (!version) {
-      throw new Error('missing package version')
-    }
-    const tag = `npm/${name}/${version}`
-    try {
-      execFileSync(this.git, ['rev-parse', tag], {
-        cwd: this.cwd,
-        env: process.env,
-        //@ts-ignore
-        stdio: 'inherit',
-      })
-      throw new Error.TagAlreadyExists(tag)
-    } catch (e) {
-      if (this.verbose) {
-        console.log(`Git tag "${tag}" not found`)
-      }
-      return tag
-    }
-  }
-
-  /** @arg {{ name: string, version: string }} pkg */
-  async isPublished ({ name, version } = this.pkg) {
-    if (!name) {
-      throw new Error('missing package name')
-    }
-    if (!version) {
-      throw new Error('missing package version')
-    }
-    const url = `https://registry.npmjs.org/${name}/${version}` 
-    const response = await this.fetch(url)
-    if (response.status === 200) {
-      if (this.verbose) {
-        console.log(`NPM package ${name} ${version} already exists.`)
-      }
-      if (!this.dryRun) {
-        console.log(`OK, not publishing:`, url)
-      }
-      return true
-    } else if (response.status !== 404) {
-      throw new Error.NPMErrorCode(response.status, name, version)
-    }
-    return false
-  }
-
-  preliminaryDryRun () {
-    return runPackageManager({
-      cwd: this.cwd,
-      args: ['publish', '--dry-run', ...this.args]
-    })
-  }
-
-}
-
-export function makeSureRunIsDry (publishArgs = []) {
-  if (!publishArgs.includes('--dry-run')) {
-    publishArgs = ['--dry-run', ...publishArgs]
-  }
-  return publishArgs
+  /** Run a Git command. */
+  runGit = (command) => execSync(`${this.git} ${command}`, { cwd: this.cwd, stdio: 'inherit' })
+  /** Do a full release. */
+  releasePackage = () => releasePackage(this)
+  /** Publish to NPM. */
+  publishToNPM = () => publishToNPM(this)
+  /** Add a Git tag. */
+  tagRelease = (options) => tagRelease(this, options)
+  /** Bail if Git tag already exists. */
+  ensureFreshTag = () => ensureFreshTag(this)
+  /** Check if package is already published. */
+  isPublished = () => isPublished(this)
+  /** Run a package manager publish with dry run. */
+  preliminaryDryRun = () => preliminaryDryRun(this)
 }
 
 export class Compiler extends Logged {
-
   static printUsage () {}
-
   /** @arg {string} [cwd] root directory of package
     * @arg {object} [options]
     *
@@ -236,8 +78,7 @@ export class Compiler extends Logged {
     * @arg {object}   [options.emit] defaults to emit everything
     * @arg {boolean}  [options.keep] defaults to false if publishing
     * @arg {string}   [options.tsc] passed from env
-    * @arg {string}   [options.ecmaVersion] passed from env
-    */
+    * @arg {string}   [options.ecmaVersion] passed from env */
   constructor (cwd = process.cwd(), options) {
     const {
       verbose = !!process.env.VERBOSE,
@@ -250,315 +91,397 @@ export class Compiler extends Logged {
       ecmaVersion = process.env.UBIK_ECMA || 'latest',
     } = options || {}
     super()
-    this.cwd = cwd
-    this.pkg = pkg
-    this.args = args
-    this.dryRun = dryRun
-    this.emit = emit
-    this.verbose = verbose
-    this.tsc = tsc
+    this.cwd         = cwd
+    this.pkg         = pkg
+    this.args        = args
+    this.dryRun      = dryRun
+    this.emit        = emit
+    this.verbose     = verbose
+    this.tsc         = tsc
     this.ecmaVersion = ecmaVersion
-    this.generated = new Set()
-    this.keep = keep
+    this.generated   = new Set()
+    this.keep        = keep
+    this.extensions  = {
+      esm: {
+        outputs:    '.dist.mjs',
+        sourceMaps: '.dist.mjs.map',
+        types:      '.dist.d.mts',
+        typeMaps:   '.dist.d.mts.map',
+      },
+      cjs: {
+        outputs:    '.dist.cjs',
+        sourceMaps: '.dist.cjs.map',
+        types:      '.dist.d.cts',
+        typeMaps:   '.dist.d.cts.map',
+      },
+    }
   }
-
-  run (...commands) {
+  /** Compile source, patch outputs, collect them, and update package.json data. */
+  compileAndPatch = () =>
+    compileAndPatch(this)
+  /** Compile and patch in a single mode.
+    * @arg {string} outDir              - path to output directory
+    * @arg {typeof Patcher} CodePatcher - patcher for code
+    * @arg {typeof Patcher} TypePatcher - patcher for types
+    * @arg {Object} options             - options
+    * @arg {string} options.module      - tsconfig module setting
+    * @arg {string} options.target      - tsconfig target setting
+    * @arg {string} options.outputs     - code file extension
+    * @arg {string} options.sourceMaps  - source map file extension
+    * @arg {string} options.types       - type declaration file extension
+    * @arg {string} options.typeMaps    - declaration map file extension */
+  emitPatched = (outDir, CodePatcher, TypePatcher, options) =>
+    emitPatched(this, outDir, CodePatcher, TypePatcher, options)
+  /** Collect files from temporary subdirectories into package root. */
+  collect = (tempDir, tempExt, outDir, outExt) =>
+    collect(this, tempDir, tempExt, outDir, outExt)
+  /** Revert to original package state. */
+  revert = () =>
+    revert(this)
+  /** Run one or more commands. */
+  run = (...commands) => {
     this.log.log(`Running ${commands.length} command(s) in`, bold(resolve(this.cwd))+':')
     return runConcurrently({ cwd: this.cwd, commands })
   }
-
-  toRel (...args) {
-    return toRel(this.cwd, ...args)
-  }
-
-  revertable (name, fn) {
-    try { return fn() } catch (e) { this.onError(name)(e) }
-  }
-
-  onError (source) {
-    return e => {
-      this.log.br().error(
-        `${bold(source)} failed:`,
-        bold(e.message)+'\n'+e.stack.slice(e.stack.indexOf('\n'))
-      )
-      this.revert()
-      throw e
-    }
-  }
-
-  async compileAndPatch () {
-    // Set ubik flag in package. This is so that Ubik does not process the same package twice.
-    this.pkg.ubik = true
-
-    // Set default main entrypoint of module if missing.
-    if (!this.pkg.main) {
-      this.log.warn('No "main" in package.json, defaulting to index.ts')
-      this.pkg.main = 'index.ts'
-    }
-
-    // Inherit preset exports of package.
-    this.pkg.exports ||= {}
-    this.pkg.exports = {
-      ...this.pkg.exports, '.': { 
-        ...(typeof this.pkg.exports['.'] === 'object' ? this.pkg.exports : null) || {},
-        'source': this.toRel(this.pkg.main)
-      }
-    }
-
-    // If there's a browser-specific entrypoint, include it in the exports.
-    if (this.pkg.browser) {
-      const ext = ((this.pkg.type === 'module')
-        ? this.emit?.esm?.outputs
-        : this.emit?.cjs?.outputs)
-      const browser = this.toRel(replaceExtension(this.pkg.browser, '.ts', ext || '.dist.js'))
-      this.pkg.exports = {
-        ...this.pkg.exports, '.': {
-          ...this.pkg.exports['.'],
-          'browser': browser
-        }
-      }
-      this.pkg.browser = browser
-    }
-
-    // Emit CJS and ESM versions.
-    await Promise.all([
-      this.emitPatched(resolve(this.cwd, '.ubik-esm'), {
-        module:      process.env.UBIK_ESM_MODULE || 'esnext',
-        target:      process.env.UBIK_ESM_TARGET || 'esnext',
-        outputs:     '.dist.mjs',
-        sourceMaps:  '.dist.mjs.map',
-        types:       '.dist.d.mts',
-        typeMaps:    '.dist.d.mts.map',
-        CodePatcher: Patcher.MJS,
-        TypePatcher: Patcher.MTS
-      }),
-      this.emitPatched(resolve(this.cwd, '.ubik-cjs'), {
-        module:      process.env.UBIK_CJS_MODULE || 'commonjs',
-        target:      process.env.UBIK_CJS_TARGET || 'esnext',
-        outputs:     '.dist.cjs',
-        sourceMaps:  '.dist.cjs.map',
-        types:       '.dist.d.cts',
-        typeMaps:    '.dist.d.cts.map',
-        CodePatcher: Patcher.CJS, 
-        TypePatcher: Patcher.CTS,
-      }),
-    ])
-
-    // Set exports in package.json
-    this.pkg.exports = {
-      ...this.pkg.exports,
-      '.': {
-        ...this.pkg.exports['.'],
-        'import': {
-          'types': this.toRel(
-            replaceExtension(this.pkg.main, '.ts', '.dist.d.mts')
-          ),
-          'default': this.toRel(
-            replaceExtension(this.pkg.main, '.ts', '.dist.mjs')
-          ),
-        },
-        'require': {
-          'types': this.toRel(
-            replaceExtension(this.pkg.main, '.ts', '.dist.d.cts')
-          ),
-          'default': this.toRel(
-            replaceExtension(this.pkg.main, '.ts', '.dist.cjs')
-          )
-        },
-        'types': this.toRel(
-          replaceExtension(
-            this.pkg.main, '.ts',
-            (this.pkg.type === 'module') ? '.dist.d.mts' : '.dist.d.cts'
-          )
-        ),
-        'default': this.toRel(
-          replaceExtension(
-            this.pkg.main, '.ts',
-            (this.pkg.type === 'module') ? '.dist.mjs' : '.dist.cjs'
-          )
-        )
-      }
-    }
-
-    // Set default entrypoints in package.json, depending on package type.
-    if (this.pkg.type !== 'module') {
-      this.pkg.types = this.toRel(
-        replaceExtension(this.pkg.main, '.ts', this.emit?.cjs?.types||'.dist.d.cts')
-      )
-      this.pkg.main = this.toRel(
-        replaceExtension(this.pkg.main, '.ts', this.emit?.cjs?.outputs||'.dist.cjs')
-      )
-    } else {
-      // 'default' key must go last, see https://stackoverflow.com/a/76127619 *asplode*
-      this.pkg.types = this.toRel(
-        replaceExtension(this.pkg.main, '.ts', this.emit?.esm?.types||'.dist.d.mts')
-      )
-      this.pkg.main = this.toRel(
-        replaceExtension(this.pkg.main, '.ts', this.emit?.esm?.outputs||'.dist.mjs')
-      )
-    }
-
-    // Include generated files into package.
-    this.pkg.files = [
-      ...this.pkg.files,
-      ...this.generated // FIXME: return from emit fns instead
-    ]
-
-    // Write package.json if it's not a dry run.
-    if (this.dryRun) {
-      this.log.br().info(
-        `Contents of patched package.json:\n${this.pkg.stringified}`
-      )
-    } else {
-      this.log.log(
-        "Backing up package.json to package.json.bak"
-      )
-      copyFileSync(join(this.cwd, 'package.json'), join(this.cwd, 'package.json.bak'))
-      writeFileSync(join(this.cwd, 'package.json'), this.pkg.stringified, 'utf8')
-    }
-
-    return this.generated
-  }
-
-  /** @arg {string} outDir                      - path to output directory
-    * @arg {Object} options                     - options
-    * @arg {string} options.module              - tsconfig module setting
-    * @arg {string} options.target              - tsconfig target setting
-    * @arg {string} options.outputs             - code file extension
-    * @arg {string} options.sourceMaps          - source map file extension
-    * @arg {string} options.types               - type declaration file extension
-    * @arg {string} options.typeMaps            - declaration map file extension
-    * @arg {typeof Patcher} options.CodePatcher - patcher for code
-    * @arg {typeof Patcher} options.TypePatcher - patcher for types */
-  async emitPatched (outDir, {
-    module,
-    target,
-    outputs,
-    sourceMaps,
-    types,
-    typeMaps,
-    CodePatcher,
-    TypePatcher
-  }) {
-    const dryRun = this.dryRun
-    if (outputs||sourceMaps||types||typeMaps) {
-      this.log.log(
-        'Creating empty', bold(outDir)
-      )
-      rimrafSync(outDir)
-      mkdirpSync(outDir)
-      await this.run([this.tsc,
-        '--target', target,
-        '--module', module,
-        '--outDir', outDir,
-        sourceMaps && '--sourceMap',
-        types      && '--declaration',
-        typeMaps   && '--declarationMap',
-      ].join(' '))
-      if (outputs) {
-        this.log.log(
-          'Collecting code from', bold(outDir)
-        )
-        await this.revertable(`patch ${outputs}`,
-          ()=>new CodePatcher({cwd: outDir, dryRun}).patchAll(outputs))
-        await this.revertable(`collect ${outputs}`,
-          ()=>this.collect(outDir, '.js', this.cwd, outputs))
-        if (sourceMaps) {
-          await this.revertable(`collect ${sourceMaps}`,
-            ()=>this.collect(outDir, '.js.map', this.cwd, sourceMaps))
-        }
-      }
-      if (types) {
-        this.log.log(
-          'Collecting types from', bold(outDir)
-        )
-        await this.revertable(`patch ${types}`,
-          ()=>new TypePatcher({cwd: outDir, dryRun}).patchAll(types))
-        await this.revertable(`collect ${outputs}`,
-          ()=>this.collect(outDir, '.d.ts', this.cwd, types))
-        if (typeMaps) {
-          await this.revertable(`collect ${typeMaps}`,
-            ()=>this.collect(outDir, '.d.ts.map', this.cwd, typeMaps))
-        }
-      }
-      this.log.log(
-        'Removing', bold(outDir)
-      )
-      rimrafSync(outDir)
-    }
-  }
-
-  async collect (
-    tempDir = Error.required('tempDir') || '',
-    tempExt = Error.required('tempExt') || '',
-    outDir  = Error.required('outDir')  || '',
-    outExt  = Error.required('outExt')  || '',
-  ) {
-    this.log.log(
-      `Collecting from ${bold(this.toRel(tempDir))}: ${bold(tempExt)} -> ${bold(`${outExt}`)}`
+  /** Output a path relative to cwd. */
+  toRel = (...args) => toRel(this.cwd, ...args)
+  /** A revertable operation. */
+  revertable = (name, fn) => { try { return fn() } catch (e) { this.onError(name)(e) } }
+  /** On error, revert. */
+  onError = (source) => e => {
+    this.log.br().error(
+      `${bold(source)} failed:`,
+      bold(e.message)+'\n'+e.stack.slice(e.stack.indexOf('\n'))
     )
-    const glob1 = `${tempDir}/*${tempExt}`
-    const glob2 = `${tempDir}/**/*${tempExt}`
-    const globs = ['!node_modules', '!**/node_modules', glob1, glob2]
-    const inputs = await fastGlob(globs)
-    const outputs = []
-    for (const file of inputs.filter(file=>file.endsWith(tempExt))) {
-      const srcFile = resolve(file)
-      const outFile = replaceExtension(
-        join(outDir, relative(tempDir, file)), tempExt, outExt
-      )
-      //this.log.debug({
-        //srcFile,
-        //outDir,
-        //tempDir,
-        //file,
-        //tempExt,
-        //outExt,
-        //outFile
-      //})
-      mkdirpSync(dirname(outFile))
-      if (this.verbose) {
-        this.log.debug(`${this.toRel(srcFile)} -> ${this.toRel(outFile)}`)
-      }
-      this.log.debug(
-        'Collect', bold(relative(this.cwd, srcFile)), '->', bold(relative(this.cwd, outFile))
-      )
-      copyFileSync(srcFile, outFile)
-      unlinkSync(srcFile)
-      outputs.push(outFile)
-      this.generated.add(this.toRel(outFile))
-    }
+    this.revert()
+    throw e
   }
+}
 
-  revert () {
-    if (this.keep) {
-      this.log.br().warn(
-        "Not restoring original 'package.json'; keeping build artifacts."
-      ).warn(
-        "Your package is now in a *modified* state: make sure you don't commit it by accident!"
-      ).warn(
-        "When you're done inspecting the intermediate results, " +
-        "rename 'package.json.bak' back to 'package.json'"
-      )
-      return true
-    }
-    this.log.br().log('Reverting modifications...')
-    if (!existsSync(join(this.cwd, 'package.json.bak'))) {
-      this.log.warn("Backup file package.json.bak not found")
-    } else {
-      this.log.log("Restoring original package.json")
-      unlinkSync(join(this.cwd, 'package.json'))
-      copyFileSync(join(this.cwd, 'package.json.bak'), join(this.cwd, 'package.json'))
-      unlinkSync(join(this.cwd, 'package.json.bak'))
-    }
-    this.log.log('Deleting generated files...')
-    for (const file of [...this.generated].sort()) {
-      this.log.debug('Deleting', file)
-      unlinkSync(file)
-    }
+async function releasePackage ({
+  pkg, log, cwd, args, keep, verbose, dryRun,
+  ensureFreshTag, isPublished, preliminaryDryRun, tagRelease
+}) {
+  if (pkg.private) {
+    log.info('Skipping private package:', pkg.name)
     return true
   }
+  if (pkg.ubik && !!process.env.UBIK_SKIP_FIXED) {
+    log.warn('Skipping patched package:', pkg.name)
+    return true
+  }
+  const previousCwd = process.cwd()
+  try {
+    process.chdir(cwd)
+    log.debug('Working in', process.cwd())
+    const { name, version } = pkg
+    /** Make sure Git tag doesn't exist. */
+    let tag
+    if (name) {
+      tag = ensureFreshTag()
+    }
+    /** Second deduplication: Make sure the library is not already published. */
+    if (await isPublished()) {
+      console.warn(
+        bold(version), 'is already published. Increment version in package.json to publish.'
+      )
+      return
+    }
+    /** Print the contents of package.json if we'll be publishing. */
+    if (verbose) {
+      console.log(`Original package.json:\n${JSON.stringify(pkg, null, 2)}`)
+    }
+    /** In wet mode, try a dry run first. */
+    if (!dryRun) {
+      preliminaryDryRun()
+    } else {
+      args = makeSureRunIsDry(args)
+    }
+    const compiler = new Compiler(cwd, {
+      dryRun: dryRun,
+      pkg:    pkg,
+      args:   args,
+      keep:   keep
+    })
+    /** Do the TypeScript magic if necessary. */
+    if (pkg.isTypeScript) {
+      await compiler.compileAndPatch()
+    }
+    try {
+      /** If is not a dry run, publish to NPM */
+      if (!dryRun) {
+        publishToNPM()
+        if (!args.includes('--dry-run') && tag) {
+          tagRelease({ tag })
+        }
+      } else {
+        console.log('Dry run successful:', tag)
+      }
+    } catch (e) {
+      /** Restore everything to a (near-)pristine state. */
+      compiler.revert()
+      throw e
+    }
+    compiler.revert()
+    log.debug('Returning to', previousCwd)
+    process.chdir(previousCwd)
+    return pkg
+  } finally {
+    log.debug('Returning to', previousCwd)
+    process.chdir(previousCwd)
+  }
+}
 
+function publishToNPM ({ npm, args, cwd }) {
+  console.log(`${npm} publish`, ...args)
+  return runPackageManager({ cwd, npm, args: ['publish', '--no-git-checks', ...args] })
+}
+
+function tagRelease ({ log, runGit }, {
+  tag    = undefined,
+  noTag  = Boolean(process.env.UBIK_NO_TAG),
+  noPush = Boolean(process.env.UBIK_NO_PUSH),
+} = {}) {
+  log.br().log('Published:', tag)
+  // Add Git tag
+  if (noTag) return {}
+  this.runGit(`tag -f "${tag}"`)
+  if (noPush) return { tag }
+  this.runGit('push --tags')
+  return { tag, pushed: true }
+}
+
+async function ensureFreshTag ({ pkg: { name, version }, git, cwd, verbose }) {
+  if (!name) {
+    throw new Error('missing package name')
+  }
+  if (!version) {
+    throw new Error('missing package version')
+  }
+  const tag = `npm/${name}/${version}`
+  try {
+    execFileSync(this.git, ['rev-parse', tag], {
+      cwd: this.cwd,
+      env: process.env,
+      //@ts-ignore
+      stdio: 'inherit',
+    })
+    throw new Error.TagAlreadyExists(tag)
+  } catch (e) {
+    if (this.verbose) {
+      console.log(`Git tag "${tag}" not found`)
+    }
+    return tag
+  }
+}
+
+async function isPublished ({ pkg: { name, version }, verbose, dryRun, fetch }) {
+  if (!name) {
+    throw new Error('missing package name')
+  }
+  if (!version) {
+    throw new Error('missing package version')
+  }
+  const url = `https://registry.npmjs.org/${name}/${version}` 
+  const response = await fetch(url)
+  if (response.status === 200) {
+    if (verbose) console.log(`NPM package ${name} ${version} already exists.`)
+    if (!dryRun) console.log(`OK, not publishing:`, url)
+    return true
+  } else if (response.status !== 404) {
+    throw new Error.NPMErrorCode(response.status, name, version)
+  }
+  return false
+}
+
+function preliminaryDryRun ({ cwd, args }) {
+  return runPackageManager({ cwd, args: ['publish', '--dry-run', ...args] })
+}
+
+export function makeSureRunIsDry (publishArgs = []) {
+  if (!publishArgs.includes('--dry-run')) {
+    publishArgs = ['--dry-run', ...publishArgs]
+  }
+  return publishArgs
+}
+
+async function compileAndPatch (
+  { cwd, pkg, log, toRel, extensions, generated, dryRun, emitPatched },
+) {
+  // Set ubik flag in package. This is so that Ubik does not process the same package twice.
+  pkg.ubik = true
+  // Set default main entrypoint of module if missing.
+  if (!pkg.main) {
+    log.warn('No "main" in package.json, defaulting to index.ts')
+    pkg.main = 'index.ts'
+  }
+  // Inherit preset exports of package.
+  pkg.exports ||= {}
+  pkg.exports["."] ||= {}
+  pkg.exports = { ...pkg.exports, '.': { ...pkg.exports, 'source': toRel(pkg.main) } }
+  // If there's a browser-specific entrypoint, include it in the exports.
+  if (pkg.browser) {
+    pkg.browser = toRel(replaceExtension(pkg.browser, '.ts', extensions.esm.outputs))
+    pkg.exports = { ...pkg.exports, '.': { ...pkg.exports['.'], 'browser': pkg.browser } }
+  }
+  // Emit CJS and ESM versions.
+  await Promise.all([
+    emitPatched(resolve(cwd, '.ubik-esm'), Patcher.MJS, Patcher.MTS, {
+      module: process.env.UBIK_ESM_MODULE || 'esnext',
+      target: process.env.UBIK_ESM_TARGET || 'esnext',
+      ...extensions.esm}),
+    emitPatched(resolve(cwd, '.ubik-cjs'), Patcher.CJS, Patcher.MTS, {
+      module: process.env.UBIK_CJS_MODULE || 'commonjs',
+      target: process.env.UBIK_CJS_TARGET || 'esnext',
+      ...extensions.cjs})])
+  // Set exports in package.json
+  pkg.exports = { ...pkg.exports, '.': { ...pkg.exports['.'],
+    'import': {
+      'types': toRel(replaceExtension(pkg.main, '.ts', extensions.esm.types)),
+      'default': toRel(replaceExtension(pkg.main, '.ts', extensions.esm.outputs)),
+    },
+    'require': {
+      'types': toRel(replaceExtension(pkg.main, '.ts', extensions.cjs.types)),
+      'default': toRel(replaceExtension(pkg.main, '.ts', extensions.cjs.outputs))
+    },
+    'types': toRel(
+      replaceExtension(pkg.main, '.ts', (pkg.type === 'module')
+        ? extensions.esm.types
+        : extensions.cjs.types)),
+    'default': toRel(
+      replaceExtension(pkg.main, '.ts', (pkg.type === 'module')
+        ? extensions.esm.outputs
+        : extensions.cjs.outputs))}}
+  // Set default entrypoints in package.json, depending on package type.
+  if (pkg.type !== 'module') {
+    Object.assign(pkg, {
+      types: toRel(replaceExtension(pkg.main, '.ts', extensions.cjs.types)),
+      main:  toRel(replaceExtension(pkg.main, '.ts', extensions.cjs.outputs))})
+  } else {
+    // 'default' key must go last, see https://stackoverflow.com/a/76127619 *asplode*
+    Object.assign(pkg, {
+      types: toRel(replaceExtension(pkg.main, '.ts', extensions.esm.types)),
+      main:  toRel(replaceExtension(pkg.main, '.ts', extensions.esm.outputs))})
+  }
+  // Include generated files into package.
+  pkg.files = [...pkg.files, ...generated]
+  // Write package.json if it's not a dry run.
+  if (dryRun) {
+    log.br().info(`Contents of patched package.json:\n${pkg.stringified}`)
+  } else {
+    log.log("Backing up package.json to package.json.bak")
+    copyFileSync(join(cwd, 'package.json'), join(cwd, 'package.json.bak'))
+    writeFileSync(join(cwd, 'package.json'), pkg.stringified, 'utf8')
+  }
+  return generated
+}
+
+async function emitPatched (
+  { dryRun, log, tsc, revertable, collect, cwd, run },
+  outDir, CodePatcher, TypePatcher,
+  { module, target, outputs, sourceMaps, types, typeMaps }
+) {
+  if (!(outputs||sourceMaps||types||typeMaps)) {
+    log.log('No outputs enabled for this mode.')
+    return
+  }
+  log.log('Creating empty', bold(outDir))
+  rimrafSync(outDir)
+  mkdirpSync(outDir)
+  await run([tsc, '--target', target, '--module', module, '--outDir', outDir,
+    sourceMaps && '--sourceMap',
+    types      && '--declaration',
+    typeMaps   && '--declarationMap',
+  ].join(' '))
+  if (outputs) {
+    log.log('Collecting code from', bold(outDir))
+    await revertable(`patch ${outputs}`,
+      ()=>new CodePatcher({cwd: outDir, dryRun}).patchAll(outputs))
+    await revertable(`collect ${outputs}`,
+      ()=>collect(outDir, '.js', cwd, outputs))
+    if (sourceMaps) {
+      await revertable(`collect ${sourceMaps}`,
+        ()=>collect(outDir, '.js.map', cwd, sourceMaps))
+    }
+  }
+  if (types) {
+    log.log('Collecting types from', bold(outDir))
+    await revertable(`patch ${types}`,
+      ()=>new TypePatcher({cwd: outDir, dryRun}).patchAll(types))
+    await revertable(`collect ${outputs}`,
+      ()=>collect(outDir, '.d.ts', cwd, types))
+    if (typeMaps) {
+      await revertable(`collect ${typeMaps}`,
+        ()=>collect(outDir, '.d.ts.map', cwd, typeMaps))
+    }
+  }
+  log.log('Removing', bold(outDir))
+  rimrafSync(outDir)
+}
+
+async function collect (
+  { log, toRel, verbose, cwd, generated },
+  tempDir = Error.required('tempDir') || '',
+  tempExt = Error.required('tempExt') || '',
+  outDir  = Error.required('outDir')  || '',
+  outExt  = Error.required('outExt')  || '',
+) {
+  log.log(
+    `Collecting from ${bold(toRel(tempDir))}: ${bold(tempExt)} -> ${bold(`${outExt}`)}`
+  )
+  const glob1 = `${tempDir}/*${tempExt}`
+  const glob2 = `${tempDir}/**/*${tempExt}`
+  const globs = ['!node_modules', '!**/node_modules', glob1, glob2]
+  const inputs = await fastGlob(globs)
+  const outputs = []
+  for (const file of inputs.filter(file=>file.endsWith(tempExt))) {
+    const srcFile = resolve(file)
+    const outFile = replaceExtension(
+      join(outDir, relative(tempDir, file)), tempExt, outExt
+    )
+    mkdirpSync(dirname(outFile))
+    if (verbose) {
+      log.debug(`${toRel(srcFile)} -> ${toRel(outFile)}`)
+    }
+    log.debug(
+      'Collect', bold(relative(cwd, srcFile)), '->', bold(relative(cwd, outFile))
+    )
+    copyFileSync(srcFile, outFile)
+    unlinkSync(srcFile)
+    outputs.push(outFile)
+    generated.add(toRel(outFile))
+  }
+}
+
+function revert (
+  { keep, log, cwd, generated }
+) {
+  if (keep) {
+    log.br().warn(
+      "Not restoring original 'package.json'; keeping build artifacts."
+    ).warn(
+      "Your package is now in a *modified* state: make sure you don't commit it by accident!"
+    ).warn(
+      "When you're done inspecting the intermediate results, " +
+      "rename 'package.json.bak' back to 'package.json'"
+    )
+    return true
+  }
+  log.br().log('Reverting modifications...')
+  if (!existsSync(join(cwd, 'package.json.bak'))) {
+    log.warn("Backup file package.json.bak not found")
+  } else {
+    log.log("Restoring original package.json")
+    unlinkSync(join(cwd, 'package.json'))
+    copyFileSync(join(cwd, 'package.json.bak'), join(cwd, 'package.json'))
+    unlinkSync(join(cwd, 'package.json.bak'))
+  }
+  log.log('Deleting generated files...')
+  for (const file of [...generated].sort()) {
+    log.debug('Deleting', file)
+    unlinkSync(file)
+  }
+  return true
 }
 
 // Changes x.a to x.b:
