@@ -159,9 +159,8 @@ export class MTSPatcher extends Patcher {
       const isRelative = oldValue.startsWith('./') || oldValue.startsWith('../')
       const isNotPatched = !oldValue.endsWith('.dist')
       if (isRelative && isNotPatched) {
-        const newValue = `${oldValue}.dist`
+        const newValue = `${oldValue}.dist.d.mts`
         this.log.debug(' ', oldValue, '->', newValue)
-        console.log({declaration})
         declaration.importKind   = 'type'
         declaration.source.value = newValue
         declaration.source.raw   = JSON.stringify(newValue)
@@ -244,15 +243,29 @@ export class CTSPatcher extends Patcher {
   patch ({
     file   = Error.required('file'),
     source = readFileSync(resolve(this.cwd, file), 'utf8'),
-    ast    = null,//acornParse(file, source),
+    ast    = recastParse(source),
     index  = 0,
     total  = 0,
   }) {
-    this.log.warn('not implemented', file)
-    const { cwd, log } = this
-    file = resolve(cwd, file)
-    const result = source
-    return this.savePatched(false, file, result.replace(
+    file = resolve(this.cwd, file)
+    let modified = false
+    for (const declaration of ast.program.body) {
+      if (!esmDeclarationsToPatch.includes(declaration.type) || !declaration.source?.value) {
+        continue
+      }
+      const oldValue = declaration.source.value
+      const isRelative = oldValue.startsWith('./') || oldValue.startsWith('../')
+      const isNotPatched = !oldValue.endsWith('.dist')
+      if (isRelative && isNotPatched) {
+        const newValue = `${oldValue}.dist.d.cts`
+        this.log.debug(' ', oldValue, '->', newValue)
+        declaration.importKind   = 'type'
+        declaration.source.value = newValue
+        declaration.source.raw   = JSON.stringify(newValue)
+        modified = true
+      }
+    }
+    return this.savePatched(modified, file, recast.print(ast).code.replace(
       CTSPatcher.sourceMapRegExp,
       `$1${this.patchExt}$3`
     ))
