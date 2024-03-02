@@ -329,7 +329,7 @@ async function compileAndPatch (
       module: process.env.UBIK_ESM_MODULE || 'esnext',
       target: process.env.UBIK_ESM_TARGET || 'esnext',
       ...extensions.esm}),
-    emitPatched(resolve(cwd, '.ubik-cjs'), CJSPatcher, MTSPatcher, {
+    emitPatched(resolve(cwd, '.ubik-cjs'), CJSPatcher, CTSPatcher, {
       module: process.env.UBIK_CJS_MODULE || 'commonjs',
       target: process.env.UBIK_CJS_TARGET || 'esnext',
       ...extensions.cjs})])
