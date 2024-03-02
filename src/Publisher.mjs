@@ -16,7 +16,7 @@ import Error from './Error.mjs'
 import Logged, { console, bold } from './Logged.mjs'
 import Package, { determinePackageManager, runPackageManager } from './Package.mjs'
 import runConcurrently from './run.mjs'
-import { MJSPatcher, MTSPatcher, CJSPatcher, CTSPatcher } from './Patcher.mjs'
+import Patcher, { MJSPatcher, MTSPatcher, CJSPatcher, CTSPatcher } from './Patcher.mjs'
 
 export class Publisher extends Logged {
   static printUsage () {}
@@ -147,7 +147,10 @@ export class Compiler extends Logged {
   /** Output a path relative to cwd. */
   toRel = (...args) => toRel(this.cwd, ...args)
   /** A revertable operation. */
-  revertable = (name, fn) => { try { return fn() } catch (e) { this.onError(name)(e) } }
+  revertable = (name, fn) => {
+    this.log.debug('Revertable:', bold(name))
+    try { return fn() } catch (e) { this.onError(name)(e) }
+  }
   /** On error, revert. */
   onError = (source) => e => {
     this.log.br().error(
@@ -161,7 +164,7 @@ export class Compiler extends Logged {
 
 async function releasePackage ({
   pkg, log, cwd, args, keep, verbose, dryRun,
-  ensureFreshTag, isPublished, preliminaryDryRun, tagRelease
+  ensureFreshTag, isPublished, preliminaryDryRun, tagRelease, publishToNPM
 }) {
   if (pkg.private) {
     log.info('Skipping private package:', pkg.name)
@@ -179,7 +182,7 @@ async function releasePackage ({
     /** Make sure Git tag doesn't exist. */
     let tag
     if (name) {
-      tag = ensureFreshTag()
+      tag = await ensureFreshTag()
     }
     /** Second deduplication: Make sure the library is not already published. */
     if (await isPublished()) {
@@ -198,25 +201,20 @@ async function releasePackage ({
     } else {
       args = makeSureRunIsDry(args)
     }
-    const compiler = new Compiler(cwd, {
-      dryRun: dryRun,
-      pkg:    pkg,
-      args:   args,
-      keep:   keep
-    })
+    const compiler = new Compiler(cwd, { dryRun, pkg, args, keep })
     /** Do the TypeScript magic if necessary. */
     if (pkg.isTypeScript) {
       await compiler.compileAndPatch()
     }
     try {
       /** If is not a dry run, publish to NPM */
-      if (!dryRun) {
+      if (dryRun) {
+        console.log('Dry run successful:', tag)
+      } else {
         publishToNPM()
         if (!args.includes('--dry-run') && tag) {
           tagRelease({ tag })
         }
-      } else {
-        console.log('Dry run successful:', tag)
       }
     } catch (e) {
       /** Restore everything to a (near-)pristine state. */
@@ -246,9 +244,9 @@ function tagRelease ({ log, runGit }, {
   log.br().log('Published:', tag)
   // Add Git tag
   if (noTag) return {}
-  this.runGit(`tag -f "${tag}"`)
+  runGit(`tag -f "${tag}"`)
   if (noPush) return { tag }
-  this.runGit('push --tags')
+  runGit('push --tags')
   return { tag, pushed: true }
 }
 
@@ -261,15 +259,15 @@ async function ensureFreshTag ({ pkg: { name, version }, git, cwd, verbose }) {
   }
   const tag = `npm/${name}/${version}`
   try {
-    execFileSync(this.git, ['rev-parse', tag], {
-      cwd: this.cwd,
+    execFileSync(git, ['rev-parse', tag], {
+      cwd,
       env: process.env,
       //@ts-ignore
       stdio: 'inherit',
     })
     throw new Error.TagAlreadyExists(tag)
   } catch (e) {
-    if (this.verbose) {
+    if (verbose) {
       console.log(`Git tag "${tag}" not found`)
     }
     return tag
@@ -397,24 +395,20 @@ async function emitPatched (
   if (outputs) {
     log.log('Collecting code from', bold(outDir))
     await revertable(`patch ${outputs}`,
-      ()=>new CodePatcher({cwd: outDir, dryRun}).patchAll(outputs))
+      ()=>new CodePatcher({cwd: outDir, dryRun}).patchAll('.js'))
     await revertable(`collect ${outputs}`,
       ()=>collect(outDir, '.js', cwd, outputs))
-    if (sourceMaps) {
-      await revertable(`collect ${sourceMaps}`,
-        ()=>collect(outDir, '.js.map', cwd, sourceMaps))
-    }
+    if (sourceMaps) await revertable(`collect ${sourceMaps}`,
+      ()=>collect(outDir, '.js.map', cwd, sourceMaps))
   }
   if (types) {
     log.log('Collecting types from', bold(outDir))
     await revertable(`patch ${types}`,
-      ()=>new TypePatcher({cwd: outDir, dryRun}).patchAll(types))
+      ()=>new TypePatcher({cwd: outDir, dryRun}).patchAll('.d.ts'))
     await revertable(`collect ${outputs}`,
       ()=>collect(outDir, '.d.ts', cwd, types))
-    if (typeMaps) {
-      await revertable(`collect ${typeMaps}`,
-        ()=>collect(outDir, '.d.ts.map', cwd, typeMaps))
-    }
+    if (typeMaps) await revertable(`collect ${typeMaps}`,
+      ()=>collect(outDir, '.d.ts.map', cwd, typeMaps))
   }
   log.log('Removing', bold(outDir))
   rimrafSync(outDir)

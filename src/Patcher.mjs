@@ -6,7 +6,7 @@ import Error from './Error.mjs'
 import { acornParse, TSFile } from './Resolver.mjs'
 
 import { resolve, dirname, relative } from 'node:path'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs'
 
 import fastGlob from 'fast-glob'
 import recast from 'recast'
@@ -31,10 +31,12 @@ export default class Patcher extends Logged {
   }
   patched = {}
   async patchAll (ext) {
-    const files = await fastGlob([
-      `${this.cwd}/*${this.matchExt}`,
-      `${this.cwd}/**/*${this.matchExt}`
-    ])
+    const globs = [`${this.cwd}/*${ext}`, `${this.cwd}/**/*${ext}`]
+    this.log.log(`Collecting files to patch:`)
+    for (const glob of globs) {
+      this.log.log(` - ${bold(glob)}`)
+    }
+    const files = await fastGlob(globs)
     this.log.log(`Patching ${files.length} files`)
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
@@ -69,7 +71,7 @@ const esmDeclarationsToPatch = [
 ]
 
 export class MJSPatcher extends Patcher {
-  static sourceMapRegExp = /(\/\/# sourceMappingURL=.+)(.js)(.map)/
+  static sourceMapRegExp = /(\/\/# sourceMappingURL=.+)(.js)(.map)/g
   constructor (options) {
     options.matchExt ??= '.mjs'
     options.patchExt ??= '.dist.mjs'
@@ -133,7 +135,7 @@ export class MJSPatcher extends Patcher {
 }
 
 export class MTSPatcher extends Patcher {
-  static sourceMapRegExp = /(\/\/# sourceMappingURL=.+)(.d.ts)(.map)/
+  static sourceMapRegExp = /(\/\/# sourceMappingURL=.+)(.d.ts)(.map)/g
   constructor (options) {
     options.matchExt ??= '.d.mts'
     options.patchExt ??= '.dist.d.mts'
@@ -170,7 +172,7 @@ export class MTSPatcher extends Patcher {
 }
 
 export class CJSPatcher extends Patcher {
-  static sourceMapRegExp = /(\/\/# sourceMappingURL=.+)(.js)(.map)/
+  static sourceMapRegExp = /(\/\/# sourceMappingURL=.+)(.js)(.map)/g
   constructor (options) {
     options.matchExt ??= '.cjs'
     options.patchExt ??= '.dist.cjs'
@@ -229,7 +231,7 @@ export class CJSPatcher extends Patcher {
 }
 
 export class CTSPatcher extends Patcher {
-  static sourceMapRegExp = /(\/\/# sourceMappingURL=.+)(.d.ts)(.map)/
+  static sourceMapRegExp = /(\/\/# sourceMappingURL=.+)(.d.ts)(.map)/g
   constructor (options) {
     options.matchExt ??= '.d.cts'
     options.patchExt ??= '.dist.d.cts'
