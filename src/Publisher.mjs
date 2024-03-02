@@ -7,15 +7,16 @@ import { execSync, execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import process from 'node:process'
 import fetch from 'node-fetch'
-import Error from './Error.mjs'
-import Logged, { console, bold } from './Logged.mjs'
-import Package, { determinePackageManager, runPackageManager } from './Package.mjs'
-import runConcurrently from './run.mjs'
-import Patcher from './Patcher.mjs'
 import { readdirSync, existsSync, writeFileSync, copyFileSync, unlinkSync } from 'node:fs'
 import { mkdirpSync } from 'mkdirp'
 import { rimrafSync } from 'rimraf'
 import fastGlob from 'fast-glob'
+
+import Error from './Error.mjs'
+import Logged, { console, bold } from './Logged.mjs'
+import Package, { determinePackageManager, runPackageManager } from './Package.mjs'
+import runConcurrently from './run.mjs'
+import { MJSPatcher, MTSPatcher, CJSPatcher, CTSPatcher } from './Patcher.mjs'
 
 export class Publisher extends Logged {
   static printUsage () {}
@@ -39,15 +40,15 @@ export class Publisher extends Logged {
     compiled = process.env.UBIK_DIST || '.dist'
   } = {}) {
     super()
-    this.cwd = cwd
-    this.pkg = pkg
+    this.cwd     = cwd
+    this.pkg     = pkg
     this.verbose = verbose
-    this.keep = keep
-    this.dryRun = dryRun
-    this.fetch = fetch
-    this.args = args
-    this.npm = npm
-    this.git = git
+    this.keep    = keep
+    this.dryRun  = dryRun
+    this.fetch   = fetch
+    this.args    = args
+    this.npm     = npm
+    this.git     = git
   }
   /** Run a Git command. */
   runGit = (command) => execSync(`${this.git} ${command}`, { cwd: this.cwd, stdio: 'inherit' })
@@ -326,11 +327,11 @@ async function compileAndPatch (
   }
   // Emit CJS and ESM versions.
   await Promise.all([
-    emitPatched(resolve(cwd, '.ubik-esm'), Patcher.MJS, Patcher.MTS, {
+    emitPatched(resolve(cwd, '.ubik-esm'), MJSPatcher, MTSPatcher, {
       module: process.env.UBIK_ESM_MODULE || 'esnext',
       target: process.env.UBIK_ESM_TARGET || 'esnext',
       ...extensions.esm}),
-    emitPatched(resolve(cwd, '.ubik-cjs'), Patcher.CJS, Patcher.MTS, {
+    emitPatched(resolve(cwd, '.ubik-cjs'), CJSPatcher, MTSPatcher, {
       module: process.env.UBIK_CJS_MODULE || 'commonjs',
       target: process.env.UBIK_CJS_TARGET || 'esnext',
       ...extensions.cjs})])
@@ -472,9 +473,11 @@ function revert (
     log.warn("Backup file package.json.bak not found")
   } else {
     log.log("Restoring original package.json")
-    unlinkSync(join(cwd, 'package.json'))
-    copyFileSync(join(cwd, 'package.json.bak'), join(cwd, 'package.json'))
-    unlinkSync(join(cwd, 'package.json.bak'))
+    const pjs = join(cwd, 'package.json')
+    const bak = join(cwd, 'package.json.bak')
+    unlinkSync(pjs)
+    copyFileSync(bak, pjs)
+    unlinkSync(bak)
   }
   log.log('Deleting generated files...')
   for (const file of [...generated].sort()) {

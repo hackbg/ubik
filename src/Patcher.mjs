@@ -17,7 +17,6 @@ import { recastTS } from '../shims.cjs'
 const console = new Console('@hackbg/ubik')
 
 export default class Patcher extends Logged {
-
   constructor ({
     cwd = process.cwd(),
     dryRun = true,
@@ -30,9 +29,7 @@ export default class Patcher extends Logged {
     this.matchExt = matchExt
     this.patchExt = patchExt
   }
-
   patched = {}
-
   async patchAll (ext) {
     const files = await fastGlob([
       `${this.cwd}/*${this.matchExt}`,
@@ -48,12 +45,10 @@ export default class Patcher extends Logged {
     }
     return this.patched
   }
-
   patch ({ file, index, total }) {
     throw new Error('abstract')
     return this.patched
   }
-  
   savePatched (modified, file, src) {
     if (modified) {
       this.patched[file] = src
@@ -63,193 +58,202 @@ export default class Patcher extends Logged {
     }
     return this.patched
   }
+}
 
-  static MJS = class MJSPatcher extends Patcher {
+const esmDeclarationsToPatch = [
+  'ImportDeclaration',
+  'ExportDeclaration',
+  'ImportAllDeclaration',
+  'ExportAllDeclaration',
+  'ExportNamedDeclaration'
+]
 
-    constructor (options) {
-      options.matchExt ??= '.mjs'
-      options.patchExt ??= '.dist.mjs'
-      super(options)
-    }
-
-    patch ({
-      file   = Error.required('file'),
-      source = readFileSync(resolve(this.cwd, file), 'utf8'),
-      ast    = acornParse(file, source),
-      index  = 0,
-      total  = 0,
-    }) {
-      const { cwd, log, patchExt } = this
-      file = resolve(this.cwd, file)
-      let modified = false
-      const patchDeclaration = node => {
-        //@ts-ignore
-        const { type, source } = node
-        if (source?.value) {
-          const isRelative = source.value.startsWith('./') || source.value.startsWith('../')
-          const isNotPatched = !source.value.endsWith(patchExt)
-          if (isRelative && isNotPatched) {
-            const newValue = `${source.value}${patchExt}`
-            log.debug(' ', source.value, '->', newValue)
-            Object.assign(source, { value: newValue, raw: JSON.stringify(newValue) })
-            modified = true
-          }
-        }
-      }
-      const patchExpression = node => {
-        //@ts-ignore
-        const { source, loc: { start: { line, column } } } = node
-        if (source.value) {
-          const { value } = source
-          if (value.startsWith('./') || value.startsWith('../')) {
-            source.value = `${value}${patchExt}`
-            source.raw = JSON.stringify(source.value)
-            log.debug(`  import("${value}") -> import("${source.value}")`)
-            modified = true
-          }
-        } else {
-          log.warn(
-            `Dynamic or non-standard require() call encountered at ${file}:${line}:${column}.`
-          )
-        }
-      }
-      acornWalk.simple(ast, {
-        ImportDeclaration:      patchDeclaration,
-        ExportDeclaration:      patchDeclaration,
-        ImportAllDeclaration:   patchDeclaration,
-        ExportAllDeclaration:   patchDeclaration,
-        ExportNamedDeclaration: patchDeclaration,
-        ImportExpression:       patchExpression
-      })
-      return this.savePatched(modified, file, astring.generate(ast))
-    }
-
+export class MJSPatcher extends Patcher {
+  static sourceMapRegExp = /(\/\/# sourceMappingURL=.+)(.js)(.map)/
+  constructor (options) {
+    options.matchExt ??= '.mjs'
+    options.patchExt ??= '.dist.mjs'
+    super(options)
   }
-
-  static esmDeclarationsToPatch = [
-    'ImportDeclaration',
-    'ExportDeclaration',
-    'ImportAllDeclaration',
-    'ExportAllDeclaration',
-    'ExportNamedDeclaration'
-  ]
-
-  static MTS = class MTSPatcher extends Patcher {
-
-    constructor (options) {
-      options.matchExt ??= '.d.mts'
-      options.patchExt ??= '.dist.d.mts'
-      super(options)
-    }
-
-    patch ({
-      file   = Error.required('file'),
-      source = readFileSync(resolve(this.cwd, file), 'utf8'),
-      ast    = recast.parse(source, { parser: recastTS }),
-      index  = 0,
-      total  = 0,
-    }) {
-      file = resolve(this.cwd, file)
-      let modified = false
-      for (const declaration of ast.program.body) {
-        if (!Patcher.esmDeclarationsToPatch.includes(declaration.type) || !declaration.source?.value) continue
-        const oldValue = declaration.source.value
-        const isRelative = oldValue.startsWith('./') || oldValue.startsWith('../')
-        const isNotPatched = !oldValue.endsWith('.dist')
+  patch ({
+    file   = Error.required('file'),
+    source = readFileSync(resolve(this.cwd, file), 'utf8'),
+    ast    = acornParse(file, source),
+    index  = 0,
+    total  = 0,
+  }) {
+    const { cwd, log, patchExt } = this
+    file = resolve(this.cwd, file)
+    let modified = false
+    const patchDeclaration = node => {
+      //@ts-ignore
+      const { type, source } = node
+      if (source?.value) {
+        const isRelative = source.value.startsWith('./') || source.value.startsWith('../')
+        const isNotPatched = !source.value.endsWith(patchExt)
         if (isRelative && isNotPatched) {
-          const newValue = `${oldValue}.dist`
-          this.log.debug(' ', oldValue, '->', newValue)
-          Object.assign(declaration.source, { value: newValue, raw: JSON.stringify(newValue) })
+          const newValue = `${source.value}${patchExt}`
+          log.debug(' ', source.value, '->', newValue)
+          Object.assign(source, { value: newValue, raw: JSON.stringify(newValue) })
           modified = true
         }
       }
-      return this.savePatched(modified, file, recast.print(ast).code)
     }
-
-  }
-
-  static CJS = class CJSPatcher extends Patcher {
-
-    constructor (options) {
-      options.matchExt ??= '.cjs'
-      options.patchExt ??= '.dist.cjs'
-      super(options)
-    }
-
-    patch ({
-      file   = Error.required('file'),
-      source = readFileSync(resolve(this.cwd, file), 'utf8'),
-      ast    = acornParse(file, source),
-      index  = 0,
-      total  = 0,
-    }) {
-      const { cwd, log, patchExt } = this
-      file = resolve(cwd, file)
-      let modified = false
-      acornWalk.simple(ast, {
-        CallExpression (node) {
-          //@ts-ignore
-          const { callee: { type, name }, loc: { start: { line, column } } } = node
-          const args = node['arguments']
-          if (
-            type === 'Identifier' &&
-            name === 'require' // GOTCHA: if "require" is renamed to something else, idk
-          ) {
-            if (args[0]?.type === 'Literal') {
-              const value = args[0].value
-              if (value.startsWith('./') || value.startsWith('../')) {
-                const target = `${resolve(dirname(file), value)}.js`
-                if (existsSync(target)) {
-                  const newValue = `${value}${patchExt}`
-                  log.debug(`  require("${value}") -> require("${newValue}")`)
-                  args[0].value = newValue
-                  args[0].raw = JSON.stringify(newValue)
-                  modified = true
-                } else {
-                  log.warn(`  require("${bold(value)}"): ${bold(target)} not found, ignoring`)
-                }
-              }
-            } else {
-              log.warn(
-                `Dynamic or non-standard require() call encountered at ${file}:${line}:${column}.`
-              )
-            }
-          }
-
+    const patchExpression = node => {
+      //@ts-ignore
+      const { source, loc: { start: { line, column } } } = node
+      if (source.value) {
+        const { value } = source
+        if (value.startsWith('./') || value.startsWith('../')) {
+          source.value = `${value}${patchExt}`
+          source.raw = JSON.stringify(source.value)
+          log.debug(`  import("${value}") -> import("${source.value}")`)
+          modified = true
         }
-      })
-      return this.savePatched(modified, file, astring.generate(ast))
+      } else {
+        log.warn(
+          `Dynamic or non-standard require() call encountered at ${file}:${line}:${column}.`
+        )
+      }
     }
-
+    acornWalk.simple(ast, {
+      ImportDeclaration:      patchDeclaration,
+      //@ts-ignore
+      ExportDeclaration:      patchDeclaration,
+      ImportAllDeclaration:   patchDeclaration,
+      ExportAllDeclaration:   patchDeclaration,
+      ExportNamedDeclaration: patchDeclaration,
+      ImportExpression:       patchExpression
+    })
+    return this.savePatched(modified, file, astring.generate(ast).replace(
+      MJSPatcher.sourceMapRegExp,
+      `$1${this.patchExt}$3`
+    ))
   }
+}
 
-  static CTS = class CTSPatcher extends Patcher {
-
-    constructor (options) {
-      options.matchExt ??= '.d.cts'
-      options.patchExt ??= '.dist.d.cts'
-      super(options)
-    }
-
-    patch ({
-      file   = Error.required('file'),
-      source = readFileSync(resolve(this.cwd, file), 'utf8'),
-      ast    = null,//acornParse(file, source),
-      index  = 0,
-      total  = 0,
-    }) {
-      this.log.warn('not implemented', file)
-      const { cwd, log } = this
-      file = resolve(cwd, file)
-      return this.savePatched(false, file, source)
-    }
-
+export class MTSPatcher extends Patcher {
+  static sourceMapRegExp = /(\/\/# sourceMappingURL=.+)(.d.ts)(.map)/
+  constructor (options) {
+    options.matchExt ??= '.d.mts'
+    options.patchExt ??= '.dist.d.mts'
+    super(options)
   }
+  patch ({
+    file   = Error.required('file'),
+    source = readFileSync(resolve(this.cwd, file), 'utf8'),
+    ast    = recast.parse(source, { parser: recastTS }),
+    index  = 0,
+    total  = 0,
+  }) {
+    file = resolve(this.cwd, file)
+    let modified = false
+    for (const declaration of ast.program.body) {
+      if (!esmDeclarationsToPatch.includes(declaration.type) || !declaration.source?.value) {
+        continue
+      }
+      const oldValue = declaration.source.value
+      const isRelative = oldValue.startsWith('./') || oldValue.startsWith('../')
+      const isNotPatched = !oldValue.endsWith('.dist')
+      if (isRelative && isNotPatched) {
+        const newValue = `${oldValue}.dist`
+        this.log.debug(' ', oldValue, '->', newValue)
+        Object.assign(declaration.source, { value: newValue, raw: JSON.stringify(newValue) })
+        modified = true
+      }
+    }
+    return this.savePatched(modified, file, recast.print(ast).code.replace(
+      MTSPatcher.sourceMapRegExp,
+      `$1${this.patchExt}$3`
+    ))
+  }
+}
 
+export class CJSPatcher extends Patcher {
+  static sourceMapRegExp = /(\/\/# sourceMappingURL=.+)(.js)(.map)/
+  constructor (options) {
+    options.matchExt ??= '.cjs'
+    options.patchExt ??= '.dist.cjs'
+    super(options)
+  }
+  patch ({
+    file   = Error.required('file'),
+    source = readFileSync(resolve(this.cwd, file), 'utf8'),
+    ast    = acornParse(file, source),
+    index  = 0,
+    total  = 0,
+  }) {
+    const { cwd, log, patchExt } = this
+    file = resolve(cwd, file)
+    let modified = false
+    acornWalk.simple(ast, {
+      CallExpression (node) {
+        //@ts-ignore
+        const { callee: { type, name }, loc: { start: { line, column } } } = node
+        const args = node['arguments']
+        if (
+          type === 'Identifier' &&
+          name === 'require' // GOTCHA: if "require" is renamed to something else, idk
+        ) {
+          if (args[0]?.type === 'Literal') {
+            const value = args[0].value
+            //@ts-ignore
+            if (value.startsWith('./') || value.startsWith('../')) {
+              //@ts-ignore
+              const target = `${resolve(dirname(file), value)}.js`
+              if (existsSync(target)) {
+                const newValue = `${value}${patchExt}`
+                log.debug(`  require("${value}") -> require("${newValue}")`)
+                args[0].value = newValue
+                args[0].raw = JSON.stringify(newValue)
+                modified = true
+              } else {
+                log.warn(`  require("${bold(value)}"): ${bold(target)} not found, ignoring`)
+              }
+            }
+          } else {
+            log.warn(
+              `Dynamic or non-standard require() call encountered at ${file}:${line}:${column}.`
+            )
+          }
+        }
+
+      }
+    })
+    const result = astring.generate(ast)
+    return this.savePatched(modified, file, result.replace(
+      CJSPatcher.sourceMapRegExp,
+      `$1${this.patchExt}$3`
+    ))
+  }
+}
+
+export class CTSPatcher extends Patcher {
+  static sourceMapRegExp = /(\/\/# sourceMappingURL=.+)(.d.ts)(.map)/
+  constructor (options) {
+    options.matchExt ??= '.d.cts'
+    options.patchExt ??= '.dist.d.cts'
+    super(options)
+  }
+  patch ({
+    file   = Error.required('file'),
+    source = readFileSync(resolve(this.cwd, file), 'utf8'),
+    ast    = null,//acornParse(file, source),
+    index  = 0,
+    total  = 0,
+  }) {
+    this.log.warn('not implemented', file)
+    const { cwd, log } = this
+    file = resolve(cwd, file)
+    const result = source
+    return this.savePatched(false, file, result.replace(
+      CTSPatcher.sourceMapRegExp,
+      `$1${this.patchExt}$3`
+    ))
+  }
 }
 
 export function fixImportDirs (resolver, dry) {
-
   resolver.forEach(entry => {
     if (!(entry instanceof TSFile)) return
     recast.visit(entry.parsed, {
@@ -257,7 +261,6 @@ export function fixImportDirs (resolver, dry) {
       visitExportAllDeclaration,
       visitExportNamedDeclaration
     })
-
     function visitImportDeclaration (declaration) {
       const oldSpecifier = declaration.value.source.value
       const newSpecifier = enforceFileSpecifier(resolver, entry, oldSpecifier)
@@ -265,7 +268,6 @@ export function fixImportDirs (resolver, dry) {
       declaration.value.source.value = newSpecifier
       return false
     }
-
     function visitExportAllDeclaration (declaration) {
       if (declaration.value.source) {
         const oldSpecifier = declaration.value.source.value
@@ -275,7 +277,6 @@ export function fixImportDirs (resolver, dry) {
       }
       return false
     }
-
     function visitExportNamedDeclaration (declaration) {
       if (declaration.value.source) {
         const oldSpecifier = declaration.value.source.value
@@ -286,7 +287,6 @@ export function fixImportDirs (resolver, dry) {
       return false
     }
   })
-
   resolver.forEach(entry => {
     if (!entry.modified) return
     const code = recast.print(entry.parsed).code
@@ -297,7 +297,6 @@ export function fixImportDirs (resolver, dry) {
       writeFileSync(entry.path, code)
     }
   })
-
 }
 
 function markIfModified (entry, specifier, newSpecifier) {
@@ -335,7 +334,6 @@ export function separateNamespaceImport ({
 }) {
   const source = readFileSync(path, 'utf8')
   const parsed = parse(source)
-
   // Find a declaration of the form:
   //   import * as foo from "foobar"
   // And change it to:
@@ -381,12 +379,10 @@ export function separateNamespaceImport ({
       break
     }
   }
-
   if (!name) {
     console.warn(bold(packageName), 'not found in', bold(path))
     return source
   }
-
   // Change every type annotation of the form `foo.Bar` to `_foo.Bar`
   recast.visit(parsed, {
     visitTSTypeReference (path) {
@@ -405,13 +401,7 @@ export function separateNamespaceImport ({
       this.traverse(path)
     }
   })
-
   const result = recast.print(parsed).code
-
-  if (!dryRun) {
-    writeFileSync(path, result)
-  }
-
+  if (!dryRun) writeFileSync(path, result)
   return result
-
 }
