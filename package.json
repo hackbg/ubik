@@ -1,25 +1,15 @@
 {
+  "bin": { "ubik": "./ubik.cli.mjs" },
   "name": "@hackbg/ubik",
-  "version": "4.0.0-rc.3",
   "type": "module",
   "main": "ubik.mjs",
+  "version": "4.0.0-rc.3",
+  "license": "AGPL-3.0-only",
+  "keywords": [ "typescript" ],
   "homepage": "https://github.com/hackbg/ubik",
   "repository": "hackbg/ubik",
-  "bin": {
-    "ubik": "./ubik.cli.mjs"
-  },
-  "description": "Codemods for making TypeScript suck less.",
-  "license": "AGPL-3.0-only",
-  "files": [
-    "README.md",
-    "*.svg",
-    "*.cjs",
-    "*.mjs",
-    "!*.test.mjs",
-    "src/*.mjs",
-    "!src/*.test.mjs",
-    "docs/*"
-  ],
+  "description": "Dual publish TypeScript to CJS and ESM with CTS/MTS typedefs, source maps and declaration maps. Plus, other goodies to stop the pain.",
+  "files": [ "README.md", "*.svg", "*.cjs", "*.mjs", "!*.test.mjs", "src/*.mjs", "!src/*.test.mjs", "docs/*" ],
   "scripts": {
     "release": "./ubik.cli.mjs release --access public --otp 123123",
     "check":   "tsc --noEmit",

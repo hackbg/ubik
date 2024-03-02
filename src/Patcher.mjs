@@ -3,13 +3,14 @@
   * along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 import Logged, { Console, bold } from './Logged.mjs'
 import Error from './Error.mjs'
-import { acornParse, TSFile } from './Resolver.mjs'
+import { TSFile } from './Resolver.mjs'
 
 import { resolve, dirname, relative } from 'node:path'
 import { existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs'
 
 import fastGlob from 'fast-glob'
 import recast from 'recast'
+import * as acorn from 'acorn'
 import * as acornWalk from 'acorn-walk'
 import * as astring from 'astring'
 import { recastTS } from '../shims.cjs'
@@ -144,7 +145,7 @@ export class MTSPatcher extends Patcher {
   patch ({
     file   = Error.required('file'),
     source = readFileSync(resolve(this.cwd, file), 'utf8'),
-    ast    = recast.parse(source, { parser: recastTS }),
+    ast    = recastParse(source),
     index  = 0,
     total  = 0,
   }) {
@@ -160,7 +161,10 @@ export class MTSPatcher extends Patcher {
       if (isRelative && isNotPatched) {
         const newValue = `${oldValue}.dist`
         this.log.debug(' ', oldValue, '->', newValue)
-        Object.assign(declaration.source, { value: newValue, raw: JSON.stringify(newValue) })
+        console.log({declaration})
+        declaration.importKind   = 'type'
+        declaration.source.value = newValue
+        declaration.source.raw   = JSON.stringify(newValue)
         modified = true
       }
     }
@@ -327,15 +331,13 @@ function enforceFileSpecifier (resolver, entry, specifier) {
   return specifier
 }
 
-const parse = source => recast.parse(source, { parser: recastTS })
-
 export function separateNamespaceImport ({
   path,
   packageName,
   dryRun = true
 }) {
   const source = readFileSync(path, 'utf8')
-  const parsed = parse(source)
+  const parsed = recastParse(source)
   // Find a declaration of the form:
   //   import * as foo from "foobar"
   // And change it to:
@@ -374,9 +376,13 @@ export function separateNamespaceImport ({
         .log(' ', bold(destructuring[0].trim()))
         .log(' ', bold(destructuring[1]))
       // Add type import
-      parsed.program.body.splice(index + 1, 0, ...parse(typeImport).program.body)
+      parsed.program.body.splice(
+        index + 1, 0, ...recastParse(typeImport).program.body
+      )
       // Add destructuring expression
-      parsed.program.body.splice(index + 2, 0, ...parse(destructuring.join('\n')).program.body)
+      parsed.program.body.splice(
+        index + 2, 0, ...recastParse(destructuring.join('\n')).program.body
+      )
       // And we're done with this stage of the fix
       break
     }
@@ -406,4 +412,25 @@ export function separateNamespaceImport ({
   const result = recast.print(parsed).code
   if (!dryRun) writeFileSync(path, result)
   return result
+}
+
+export function recastParse (source) {
+  return recast.parse(source, { parser: recastTS })
+}
+
+export function acornParse (name, source) {
+  const ecmaVersion = process.env.UBIK_ECMA||'latest'
+  try {
+    return acorn.parse(source, {
+      sourceType: 'module',
+      locations: true,
+      //@ts-ignore
+      ecmaVersion
+    })
+  } catch (e) {
+    console.br()
+      .error('Failed to parse', bold(name))
+      .error(bold(e.message), 'at', e.loc.line, ':', e.loc.column)
+      .error(`Source:\n${source}`)
+  }
 }

@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 import process from 'node:process'
 import fetch from 'node-fetch'
 import { readdirSync, existsSync, writeFileSync, copyFileSync, unlinkSync } from 'node:fs'
+
 import { mkdirpSync } from 'mkdirp'
 import { rimrafSync } from 'rimraf'
 import fastGlob from 'fast-glob'
@@ -377,39 +378,47 @@ async function compileAndPatch (
 
 async function emitPatched (
   { dryRun, log, tsc, revertable, collect, cwd, run },
-  outDir, CodePatcher, TypePatcher,
-  { module, target, outputs, sourceMaps, types, typeMaps }
+  outDir, CodePatcher, TypePatcher, options
 ) {
+  const { module, target, outputs, sourceMaps, types, typeMaps } = options
   if (!(outputs||sourceMaps||types||typeMaps)) {
     log.log('No outputs enabled for this mode.')
     return
   }
+  await withOutputDirectory(log, outDir, async () => {
+    await run([tsc, '--outDir', outDir,
+      '--target', target,
+      '--module', module,
+      sourceMaps && '--sourceMap',
+      types      && '--declaration',
+      typeMaps   && '--declarationMap',
+    ].join(' '))
+    if (outputs) {
+      log.log('Collecting code from', bold(outDir))
+      await revertable(`patch ${outputs}`,
+        ()=>new CodePatcher({cwd: outDir, dryRun}).patchAll('.js'))
+      await revertable(`collect ${outputs}`,
+        ()=>collect(outDir, '.js', cwd, outputs))
+      if (sourceMaps) await revertable(`collect ${sourceMaps}`,
+        ()=>collect(outDir, '.js.map', cwd, sourceMaps))
+    }
+    if (types) {
+      log.log('Collecting types from', bold(outDir))
+      await revertable(`patch ${types}`,
+        ()=>new TypePatcher({cwd: outDir, dryRun}).patchAll('.d.ts'))
+      await revertable(`collect ${outputs}`,
+        ()=>collect(outDir, '.d.ts', cwd, types))
+      if (typeMaps) await revertable(`collect ${typeMaps}`,
+        ()=>collect(outDir, '.d.ts.map', cwd, typeMaps))
+    }
+  })
+}
+
+async function withOutputDirectory (log, outDir, callback) {
   log.log('Creating empty', bold(outDir))
   rimrafSync(outDir)
   mkdirpSync(outDir)
-  await run([tsc, '--target', target, '--module', module, '--outDir', outDir,
-    sourceMaps && '--sourceMap',
-    types      && '--declaration',
-    typeMaps   && '--declarationMap',
-  ].join(' '))
-  if (outputs) {
-    log.log('Collecting code from', bold(outDir))
-    await revertable(`patch ${outputs}`,
-      ()=>new CodePatcher({cwd: outDir, dryRun}).patchAll('.js'))
-    await revertable(`collect ${outputs}`,
-      ()=>collect(outDir, '.js', cwd, outputs))
-    if (sourceMaps) await revertable(`collect ${sourceMaps}`,
-      ()=>collect(outDir, '.js.map', cwd, sourceMaps))
-  }
-  if (types) {
-    log.log('Collecting types from', bold(outDir))
-    await revertable(`patch ${types}`,
-      ()=>new TypePatcher({cwd: outDir, dryRun}).patchAll('.d.ts'))
-    await revertable(`collect ${outputs}`,
-      ()=>collect(outDir, '.d.ts', cwd, types))
-    if (typeMaps) await revertable(`collect ${typeMaps}`,
-      ()=>collect(outDir, '.d.ts.map', cwd, typeMaps))
-  }
+  await Promise.resolve(callback())
   log.log('Removing', bold(outDir))
   rimrafSync(outDir)
 }
@@ -448,9 +457,7 @@ async function collect (
   }
 }
 
-function revert (
-  { keep, log, cwd, generated }
-) {
+function revert ({ keep, log, cwd, generated }) {
   if (keep) {
     log.br().warn(
       "Not restoring original 'package.json'; keeping build artifacts."

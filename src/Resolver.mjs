@@ -592,23 +592,6 @@ export function getDefault (map, key, def) {
   }
 }
 
-export function acornParse (name, source) {
-  const ecmaVersion = process.env.UBIK_ECMA||'latest'
-  try {
-    return acorn.parse(source, {
-      sourceType: 'module',
-      locations: true,
-      //@ts-ignore
-      ecmaVersion
-    })
-  } catch (e) {
-    console.br()
-      .error('Failed to parse', bold(name))
-      .error(bold(e.message), 'at', e.loc.line, ':', e.loc.column)
-      .error(`Source:\n${source}`)
-  }
-}
-
 export function redirectToRelative (resolver, subPackages, dry) {
   const pkg = resolver.get('package.json')
   console.log('Merging the following packages:', ...subPackages)
