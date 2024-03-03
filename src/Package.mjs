@@ -46,7 +46,7 @@ export default class NPMPackage extends Logged {
     if (!(typeof val === 'string')) {
       throw new Error('main must be string')
     }
-    this.log.debug('main :=', val)
+    this.log.debug('Setting', bold('main'), 'to', val)
     this.#json.main = val
   }
   get browser () {
@@ -56,7 +56,7 @@ export default class NPMPackage extends Logged {
     if (!(typeof val === 'string')) {
       throw new Error('browser must be string')
     }
-    this.log.debug('browser :=', val)
+    this.log.debug('Setting', bold('browser'), 'to', val)
     this.#json.browser = val
   }
   get types () {
@@ -66,7 +66,7 @@ export default class NPMPackage extends Logged {
     if (!(typeof val === 'string')) {
       throw new Error('types must be string')
     }
-    this.log.debug('types :=', val)
+    this.log.debug('Setting', bold('types'), 'to', val)
     this.#json.types = val
   }
   get exports () {
@@ -76,7 +76,7 @@ export default class NPMPackage extends Logged {
     if (!(val instanceof Object)) {
       throw new Error('exports must be object')
     }
-    this.log.debug('exports :=', JSON.stringify(val, null, 2))
+    this.log.debug('Setting', bold('exports'), 'to', JSON.stringify(val, null, 2))
     this.#json.exports = val
   }
   get files () {
@@ -86,7 +86,7 @@ export default class NPMPackage extends Logged {
     if (!(val instanceof Array)) {
       throw new Error('files must be array')
     }
-    this.log.debug('files :=', val)
+    this.log.debug('Setting', bold('files'), 'to', val)
     this.#json.files = val
   }
   get private () {
@@ -96,7 +96,7 @@ export default class NPMPackage extends Logged {
     return this.#json.ubik
   }
   set ubik (val) {
-    this.log.debug('ubik :=', val)
+    this.log.debug('Setting', bold('ubik'), 'to', val)
     this.#json.ubik = !!val
   }
   get isTypeScript () {
