@@ -391,8 +391,10 @@ async function emitPatched (
       '--module', module,
       sourceMaps && '--sourceMap',
       types      && '--declaration',
+      types      && '--declarationDir',
+      types      && outDir,
       typeMaps   && '--declarationMap',
-    ].join(' '))
+    ].filter(Boolean).join(' '))
     if (outputs) {
       log.log('Collecting code from', bold(outDir))
       await revertable(`patch ${outputs}`,
