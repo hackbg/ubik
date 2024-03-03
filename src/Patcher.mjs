@@ -135,45 +135,6 @@ export class MJSPatcher extends Patcher {
   }
 }
 
-export class MTSPatcher extends Patcher {
-  static sourceMapRegExp = /(\/\/# sourceMappingURL=.+)(.d.ts)(.map)/g
-  constructor (options) {
-    options.matchExt ??= '.d.mts'
-    options.patchExt ??= '.dist.d.mts'
-    super(options)
-  }
-  patch ({
-    file   = Error.required('file'),
-    source = readFileSync(resolve(this.cwd, file), 'utf8'),
-    ast    = recastParse(source),
-    index  = 0,
-    total  = 0,
-  }) {
-    file = resolve(this.cwd, file)
-    let modified = false
-    for (const declaration of ast.program.body) {
-      if (!esmDeclarationsToPatch.includes(declaration.type) || !declaration.source?.value) {
-        continue
-      }
-      const oldValue = declaration.source.value
-      const isRelative = oldValue.startsWith('./') || oldValue.startsWith('../')
-      const isNotPatched = !oldValue.endsWith('.dist')
-      if (isRelative && isNotPatched) {
-        const newValue = `${oldValue}.dist.d.mts`
-        this.log.debug(' ', oldValue, '->', newValue)
-        declaration.importKind   = 'type'
-        declaration.source.value = newValue
-        declaration.source.raw   = JSON.stringify(newValue)
-        modified = true
-      }
-    }
-    return this.savePatched(modified, file, recast.print(ast).code.replace(
-      MTSPatcher.sourceMapRegExp,
-      `$1${this.patchExt}$3`
-    ))
-  }
-}
-
 export class CJSPatcher extends Patcher {
   static sourceMapRegExp = /(\/\/# sourceMappingURL=.+)(.js)(.map)/g
   constructor (options) {
@@ -233,13 +194,8 @@ export class CJSPatcher extends Patcher {
   }
 }
 
-export class CTSPatcher extends Patcher {
+class TypeDeclarationPatcher extends Patcher {
   static sourceMapRegExp = /(\/\/# sourceMappingURL=.+)(.d.ts)(.map)/g
-  constructor (options) {
-    options.matchExt ??= '.d.cts'
-    options.patchExt ??= '.dist.d.cts'
-    super(options)
-  }
   patch ({
     file   = Error.required('file'),
     source = readFileSync(resolve(this.cwd, file), 'utf8'),
@@ -250,25 +206,65 @@ export class CTSPatcher extends Patcher {
     file = resolve(this.cwd, file)
     let modified = false
     for (const declaration of ast.program.body) {
-      if (!esmDeclarationsToPatch.includes(declaration.type) || !declaration.source?.value) {
-        continue
-      }
-      const oldValue = declaration.source.value
-      const isRelative = oldValue.startsWith('./') || oldValue.startsWith('../')
-      const isNotPatched = !oldValue.endsWith('.dist')
-      if (isRelative && isNotPatched) {
-        const newValue = `${oldValue}.dist.d.cts`
-        this.log.debug(' ', oldValue, '->', newValue)
-        declaration.importKind   = 'type'
-        declaration.source.value = newValue
-        declaration.source.raw   = JSON.stringify(newValue)
+      if (shouldUpdateDeclaration(declaration)) {
+        updateDeclaration(this, declaration)
         modified = true
       }
     }
     return this.savePatched(modified, file, recast.print(ast).code.replace(
-      CTSPatcher.sourceMapRegExp,
+      //@ts-ignore
+      this.constructor.sourceMapRegExp,
       `$1${this.patchExt}$3`
     ))
+  }
+}
+
+export class MTSPatcher extends TypeDeclarationPatcher {
+  constructor (options) {
+    options.matchExt ??= '.d.mts'
+    options.patchExt ??= '.dist.d.mts'
+    super(options)
+  }
+}
+
+export class CTSPatcher extends TypeDeclarationPatcher {
+  constructor (options) {
+    options.matchExt ??= '.d.cts'
+    options.patchExt ??= '.dist.d.cts'
+    super(options)
+  }
+}
+
+function shouldUpdateDeclaration (declaration) {
+  if (!esmDeclarationsToPatch.includes(declaration.type) || !declaration.source?.value) {
+    return false
+  }
+  const oldValue = declaration.source.value
+  const isRelative = oldValue.startsWith('./') || oldValue.startsWith('../')
+  const isNotPatched = !oldValue.endsWith('.dist')
+  return isRelative && !isNotPatched
+}
+
+function updateDeclaration ({ patchExt, log }, declaration) {
+  const oldValue = declaration.source.value
+  const newValue = `${oldValue}.${this.patchExt}`
+  log.debug(' ', oldValue, '->', newValue)
+  if (declaration.importKind) declaration.importKind = 'type'
+  if (declaration.exportKind) declaration.exportKind = 'type'
+  declaration.source.value = newValue
+  declaration.source.raw = JSON.stringify(newValue)
+  // To prevent generating invalid `export { * as Foo } from './bar'`,
+  // an `ExportNamedDeclaration` that has a single `ExportNamespaceSpecifier`
+  // is converted to an `ExportAllDeclaration` where `exported = old.specifiers[0].exported`.
+  if (
+    (declaration.type === 'ExportNamedDeclaration') &&
+    (declaration.specifiers.length === 1) &&
+    (declaration.specifiers[0] === 'ExportNamespaceSpecifier') &&
+    (!declaration.specifiers[0].local)
+  ) {
+    declaration.type = 'ExportAllDeclaration'
+    declaration.exported = declaration.specifiers[0].exported
+    delete declaration.specifiers
   }
 }
 
@@ -344,6 +340,19 @@ function enforceFileSpecifier (resolver, entry, specifier) {
   return specifier
 }
 
+/** Finds declarations of the form:
+  *
+  *     import * as foo from "foobar"
+  *
+  * and changes it to:
+  *
+  *     import * as __foo from "foobar"
+  *     import type * as _foo from "foobar"
+  *     //@ts-ignore
+  *     const foo = __foo['default']
+  *
+  * This is used to fix generated protobuf bindings.
+  **/
 export function separateNamespaceImport ({
   path,
   packageName,
@@ -351,13 +360,6 @@ export function separateNamespaceImport ({
 }) {
   const source = readFileSync(path, 'utf8')
   const parsed = recastParse(source)
-  // Find a declaration of the form:
-  //   import * as foo from "foobar"
-  // And change it to:
-  //   import * as __foo from "foobar"
-  //   import type * as _foo from "foobar"
-  //   //@ts-ignore
-  //   const foo = __foo['default']
   let name
   for (let index = 0; index < parsed.program.body.length; index++) {
     const node = parsed.program.body[index]
