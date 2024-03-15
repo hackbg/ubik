@@ -23,12 +23,14 @@ export default class Patcher extends Logged {
     dryRun = true,
     matchExt = Error.required('matchExt'),
     patchExt = Error.required('patchExt'),
+    ignored
   }) {
     super()
     this.cwd = cwd
     this.dryRun = dryRun
     this.matchExt = matchExt
     this.patchExt = patchExt
+    this.ignored  = ignored
   }
   patched = {}
   async patchAll (ext) {
@@ -76,6 +78,7 @@ export class MJSPatcher extends Patcher {
   constructor (options) {
     options.matchExt ??= '.mjs'
     options.patchExt ??= '.dist.mjs'
+    options.ignored  ??= /\.m?js/
     super(options)
   }
   patch ({
@@ -92,13 +95,18 @@ export class MJSPatcher extends Patcher {
       //@ts-ignore
       const { type, source } = node
       if (source?.value) {
-        const isRelative = source.value.startsWith('./') || source.value.startsWith('../')
+        const isRelative   = source.value.startsWith('./') || source.value.startsWith('../')
         const isNotPatched = !source.value.endsWith(patchExt)
+        const isIgnored    = this.ignored && this.ignored.test(source.value)
         if (isRelative && isNotPatched) {
-          const newValue = `${source.value}${patchExt}`
-          log.debug(' ', source.value, '->', newValue)
-          Object.assign(source, { value: newValue, raw: JSON.stringify(newValue) })
-          modified = true
+          if (isIgnored) {
+            log.debug(' ', source.value, '-> leaving as is')
+          } else {
+            const newValue = `${source.value}${patchExt}`
+            log.debug(' ', source.value, '->', newValue)
+            Object.assign(source, { value: newValue, raw: JSON.stringify(newValue) })
+            modified = true
+          }
         }
       }
     }
@@ -140,6 +148,7 @@ export class CJSPatcher extends Patcher {
   constructor (options) {
     options.matchExt ??= '.cjs'
     options.patchExt ??= '.dist.cjs'
+    options.ignored  ??= /\.c?js/  // FIXME: don't ignore the ignore
     super(options)
   }
   patch ({
